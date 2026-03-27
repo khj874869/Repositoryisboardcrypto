@@ -27,6 +27,9 @@ uvicorn app.main:app --reload
 
 Open `http://127.0.0.1:8000`.
 
+## Deployment Roadmap
+- See [`docs/DEPLOYMENT_ROADMAP.md`](docs/DEPLOYMENT_ROADMAP.md) for the staged plan covering web deployment and app-store mobile deployment.
+
 ## API
 - `GET /api/health`
 - `GET /api/assets`
