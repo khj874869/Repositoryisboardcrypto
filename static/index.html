@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Signal Flow MVP</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #111827; color: #f9fafb; }
+    h1, h2 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
+    .card { background: #1f2937; border-radius: 14px; padding: 18px; box-shadow: 0 6px 16px rgba(0,0,0,0.18); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; font-size: 14px; }
+    .buy { color: #22c55e; font-weight: bold; }
+    .sell { color: #ef4444; font-weight: bold; }
+    .muted { color: #9ca3af; font-size: 13px; }
+    .pill { display: inline-block; border-radius: 999px; padding: 4px 10px; background: #374151; font-size: 12px; }
+    .positive { color: #22c55e; }
+    .negative { color: #ef4444; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat { background: #374151; border-radius: 12px; padding: 8px 12px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>Signal Flow MVP</h1>
+  <div class="muted">실시간 시뮬레이션 시세 스트리밍과 전략 신호를 대시보드로 보여줍니다.</div>
+  <div class="row" style="margin: 12px 0 20px;">
+    <div class="stat">WebSocket: <span id="socket-status">연결 중...</span></div>
+    <div class="stat">관심 종목: <span id="watch-count">0</span></div>
+    <div class="stat">최근 신호: <span id="signal-count">0</span></div>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>시장 개요</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>종목</th>
+            <th>가격</th>
+            <th>변동률</th>
+            <th>RSI</th>
+            <th>SMA5 / SMA20</th>
+            <th>최근 신호</th>
+          </tr>
+        </thead>
+        <tbody id="overview-body"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>실시간 신호</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>시간</th>
+            <th>종목</th>
+            <th>유형</th>
+            <th>전략</th>
+            <th>사유</th>
+          </tr>
+        </thead>
+        <tbody id="signal-body"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const overviewBody = document.getElementById('overview-body');
+    const signalBody = document.getElementById('signal-body');
+    const socketStatus = document.getElementById('socket-status');
+    const watchCount = document.getElementById('watch-count');
+    const signalCount = document.getElementById('signal-count');
+
+    function formatPrice(value) {
+      return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
+    }
+
+    function renderOverview(rows) {
+      overviewBody.innerHTML = rows.map(row => {
+        const changeClass = row.change_rate >= 0 ? 'positive' : 'negative';
+        const signalType = row.recent_signal_type || '-';
+        const signalClass = signalType === 'BUY' ? 'buy' : (signalType === 'SELL' ? 'sell' : '');
+        return `
+          <tr>
+            <td>${row.symbol} ${row.in_watchlist ? '<span class="pill">관심</span>' : ''}</td>
+            <td>${formatPrice(row.price)}</td>
+            <td class="${changeClass}">${row.change_rate.toFixed(2)}%</td>
+            <td>${row.rsi14 ? row.rsi14.toFixed(1) : '-'}</td>
+            <td>${row.sma5 ? row.sma5.toFixed(1) : '-'} / ${row.sma20 ? row.sma20.toFixed(1) : '-'}</td>
+            <td class="${signalClass}">${signalType}</td>
+          </tr>
+        `;
+      }).join('');
+      watchCount.textContent = rows.filter(r => r.in_watchlist).length;
+    }
+
+    function renderSignals(rows) {
+      signalBody.innerHTML = rows.map(row => {
+        const signalClass = row.signal_type === 'BUY' ? 'buy' : 'sell';
+        return `
+          <tr>
+            <td>${new Date(row.created_at).toLocaleTimeString('ko-KR')}</td>
+            <td>${row.symbol}</td>
+            <td class="${signalClass}">${row.signal_type}</td>
+            <td>${row.strategy_name}</td>
+            <td>${row.reason}</td>
+          </tr>
+        `;
+      }).join('');
+      signalCount.textContent = rows.length;
+    }
+
+    async function loadOverview() {
+      const response = await fetch('/api/market/overview');
+      const data = await response.json();
+      renderOverview(data);
+    }
+
+    async function loadSignals() {
+      const response = await fetch('/api/signals/recent?limit=12');
+      const data = await response.json();
+      renderSignals(data);
+    }
+
+    function connectSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const socket = new WebSocket(`${protocol}://${window.location.host}/ws/stream`);
+      socketStatus.textContent = '연결 중...';
+
+      socket.onopen = () => {
+        socketStatus.textContent = '연결됨';
+        setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send('ping');
+          }
+        }, 3000);
+      };
+
+      socket.onmessage = async (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'signal' || message.type === 'market_snapshot') {
+          await loadOverview();
+          await loadSignals();
+        }
+      };
+
+      socket.onclose = () => {
+        socketStatus.textContent = '재연결 중...';
+        setTimeout(connectSocket, 2000);
+      };
+    }
+
+    loadOverview();
+    loadSignals();
+    connectSocket();
+  </script>
+</body>
+</html>
