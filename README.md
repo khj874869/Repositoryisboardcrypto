@@ -6,6 +6,7 @@ The backend now exposes a shared client surface for both:
 
 - a browser-based web dashboard
 - a mobile or desktop app client
+- an installable PWA shell for Android-first release paths
 
 That shared surface is centered around:
 
@@ -25,6 +26,7 @@ These endpoints give web and app clients the same startup metadata, dashboard pa
 - notification inbox with read state
 - shared dashboard and asset detail APIs for web and app clients
 - static web dashboard consuming the same shared client APIs
+- PWA manifest, service worker, and install flow foundation
 
 ## Quick Start
 
@@ -102,6 +104,7 @@ Returns:
 ## Core APIs
 
 - `GET /api/health`
+- `GET /api/readiness`
 - `GET /api/source-status`
 - `POST /api/auth/signup`
 - `POST /api/auth/login`
@@ -131,9 +134,43 @@ Returns:
 - `SIGNAL_FLOW_PUBLIC_API_BASE_URL=https://api.example.com`
 - `SIGNAL_FLOW_PUBLIC_WS_BASE_URL=wss://api.example.com/ws/stream`
 - `SIGNAL_FLOW_CORS_ORIGINS=https://web.example.com,capacitor://localhost`
+- `SIGNAL_FLOW_ENABLE_DEMO_SEED=false`
+- `SIGNAL_FLOW_STRICT_STARTUP_VALIDATION=true`
 
 ## Tests
 
 ```bash
 pytest -q
 ```
+
+## Release Path
+
+- PWA release guide: [`docs/PWA_RELEASE_GUIDE.md`](docs/PWA_RELEASE_GUIDE.md)
+
+## Database Migration Foundation
+
+The project now includes:
+
+- `DATABASE_URL` support for SQLite or PostgreSQL
+- SQLAlchemy-based database access
+- Alembic configuration and an initial migration
+- a SQLite to PostgreSQL copy utility for release cutovers
+
+Examples:
+
+```bash
+alembic upgrade head
+```
+
+```bash
+DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/signal_flow alembic upgrade head
+```
+
+- Windows migration helper:
+
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://signalflow:signalflow@127.0.0.1:5432/signal_flow"
+.\scripts\migrate-sqlite-to-postgres.ps1
+```
+
+- PostgreSQL local setup guide: [`docs/POSTGRESQL_LOCAL_SETUP.md`](docs/POSTGRESQL_LOCAL_SETUP.md)

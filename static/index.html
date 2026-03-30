@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Signal Flow Live</title>
+  <meta name="theme-color" content="#0f1b2d" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <style>
     :root { --bg:#08111d; --panel:#0f1b2d; --line:#22344d; --text:#e8eef7; --muted:#9cafc7; --buy:#2dd4bf; --sell:#fb7185; --accent:#4f8cff; }
     * { box-sizing:border-box; } body { margin:0; font-family:"Segoe UI",sans-serif; background:linear-gradient(180deg,#07111c,#0a1422); color:var(--text); }
@@ -14,6 +17,7 @@
     .stats,.cards,.summary,.forms,.diag { display:grid; gap:12px; } .stats,.cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .summary { grid-template-columns:repeat(5,minmax(0,1fr)); } .forms { grid-template-columns:repeat(2,minmax(0,1fr)); } .diag { grid-template-columns:repeat(3,minmax(0,1fr)); }
     .card,.summary-item { background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:14px; padding:14px; }
     .pill { display:inline-flex; padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.06); color:var(--muted); font-size:12px; }
+    .hero-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
     .warning { margin-top:12px; padding:12px 14px; border-radius:14px; border:1px solid rgba(251,113,133,.35); background:rgba(251,113,133,.08); color:#fecdd3; display:none; }
     .buy { color:var(--buy); font-weight:700; } .sell { color:var(--sell); font-weight:700; } .positive { color:var(--buy); } .negative { color:var(--sell); }
     label { display:grid; gap:6px; color:var(--muted); font-size:13px; } input,select,button { width:100%; border-radius:12px; border:1px solid var(--line); background:#09111d; color:var(--text); padding:11px 12px; font:inherit; }
@@ -32,6 +36,10 @@
         <div class="pill">Shared Web/App Contract</div>
         <h1>Signal Flow Live</h1>
         <p>Web and mobile clients now share one bootstrap API, one dashboard aggregate API, and one asset detail API.</p>
+        <div class="hero-actions">
+          <button id="install-button" type="button" class="secondary">Install App</button>
+          <div id="install-state" class="pill">Web mode</div>
+        </div>
         <div id="runtime-warning" class="warning"></div>
       </div>
       <div class="panel stats">
@@ -127,7 +135,7 @@
   </main>
 
   <script>
-    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
+    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, installPrompt: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
     const el = id => document.getElementById(id);
     const fmtNum = value => value == null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
     const fmtPct = value => value == null ? '-' : `${value.toFixed(2)}%`;
@@ -161,6 +169,22 @@
       el('runtime-error').textContent = source.last_error ? `Last error: ${source.last_error}` : 'No runtime errors reported.';
       el('runtime-warning').style.display = fallback ? 'block' : 'none';
       el('runtime-warning').textContent = fallback ? `Fallback active. Requested ${requested} but serving ${active}.` : '';
+    }
+
+    function renderInstallState() {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if (standalone) {
+        el('install-state').textContent = 'Installed mode';
+        el('install-button').disabled = true;
+        return;
+      }
+      if (state.installPrompt) {
+        el('install-state').textContent = 'Install available';
+        el('install-button').disabled = false;
+        return;
+      }
+      el('install-state').textContent = 'Browser mode';
+      el('install-button').disabled = true;
     }
 
     function renderWatchlist(rows) {
@@ -234,13 +258,30 @@
     async function saveSettings() { try { await requestJson(state.endpoints.notification_settings, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web_enabled: el('web-enabled').checked, email_enabled: el('email-enabled').checked }) }); await loadDashboard(); msg('Settings saved.'); } catch (error) { msg(error.message, true); } }
     async function removeWatch(symbol) { try { await requestJson(`${state.endpoints.watchlist}/${encodeURIComponent(symbol)}`, { method: 'DELETE' }); await loadDashboard(); msg(`Removed ${symbol}.`); } catch (error) { msg(error.message, true); } }
     async function readNotification(id) { try { await requestJson(`${state.endpoints.notifications}/${id}/read`, { method: 'PATCH' }); await loadDashboard(); msg('Notification marked as read.'); } catch (error) { msg(error.message, true); } }
+    async function installApp() {
+      if (!state.installPrompt) return;
+      state.installPrompt.prompt();
+      await state.installPrompt.userChoice;
+      state.installPrompt = null;
+      renderInstallState();
+    }
 
-    el('login-button').addEventListener('click', login); el('signup-button').addEventListener('click', signup); el('logout-button').addEventListener('click', logout); el('refresh-button').addEventListener('click', refreshAll); el('watch-add-button').addEventListener('click', addWatch); el('settings-save-button').addEventListener('click', saveSettings);
+    async function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        await navigator.serviceWorker.register('/sw.js');
+      } catch (_) {
+      }
+    }
+
+    el('login-button').addEventListener('click', login); el('signup-button').addEventListener('click', signup); el('logout-button').addEventListener('click', logout); el('refresh-button').addEventListener('click', refreshAll); el('watch-add-button').addEventListener('click', addWatch); el('settings-save-button').addEventListener('click', saveSettings); el('install-button').addEventListener('click', installApp);
     el('overview-body').addEventListener('click', async event => { const row = event.target.closest('tr[data-symbol]'); if (!row) return; await loadDetail(row.dataset.symbol); await loadDashboard(); });
     el('watch-body').addEventListener('click', async event => { const button = event.target.closest('.watch-remove'); if (button) await removeWatch(button.dataset.symbol); });
     el('notification-body').addEventListener('click', async event => { const button = event.target.closest('.notif-read'); if (button) await readNotification(button.dataset.id); });
+    window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); state.installPrompt = event; renderInstallState(); });
+    window.addEventListener('appinstalled', () => { state.installPrompt = null; renderInstallState(); });
 
-    (async () => { await refreshAll(); connectSocket(); })();
+    (async () => { renderInstallState(); await registerServiceWorker(); await refreshAll(); connectSocket(); })();
   </script>
 </body>
 </html>

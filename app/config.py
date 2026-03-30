@@ -7,14 +7,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / 'data'
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / 'signal_flow.db'
+DATABASE_URL = os.getenv('DATABASE_URL', os.getenv('SIGNAL_FLOW_DATABASE_URL', '')).strip()
 APP_NAME = 'Signal Flow Live'
 APP_VERSION = '0.4.0'
 APP_ENV = os.getenv('SIGNAL_FLOW_APP_ENV', 'development').strip().lower()
+IS_PRODUCTION = APP_ENV in {'production', 'prod'}
 
 DEMO_USER = 'demo'
 DEMO_EMAIL = 'demo@signal-flow.local'
 DEMO_PASSWORD = 'demo1234'
-SECRET_KEY = os.getenv('SIGNAL_FLOW_SECRET_KEY', 'signal-flow-dev-secret-key')
+DEFAULT_SECRET_KEY = 'signal-flow-dev-secret-key'
+SECRET_KEY = os.getenv('SIGNAL_FLOW_SECRET_KEY', DEFAULT_SECRET_KEY)
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('SIGNAL_FLOW_ACCESS_TOKEN_EXPIRE_MINUTES', '180'))
 BOOTSTRAP_CANDLES = int(os.getenv('SIGNAL_FLOW_BOOTSTRAP_CANDLES', '60'))
 TICK_SECONDS = float(os.getenv('SIGNAL_FLOW_TICK_SECONDS', '2'))
@@ -92,8 +95,32 @@ MARKET_SNAPSHOT_PUSH_SECONDS = float(os.getenv('SIGNAL_FLOW_MARKET_SNAPSHOT_PUSH
 PUBLIC_API_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_API_BASE_URL', '').strip().rstrip('/')
 PUBLIC_WS_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_WS_BASE_URL', '').strip().rstrip('/')
 CORS_ORIGINS = _parse_csv(os.getenv('SIGNAL_FLOW_CORS_ORIGINS'))
+ENABLE_DEMO_SEED = _is_truthy(os.getenv('SIGNAL_FLOW_ENABLE_DEMO_SEED'), default=not IS_PRODUCTION)
+STRICT_STARTUP_VALIDATION = _is_truthy(
+    os.getenv('SIGNAL_FLOW_STRICT_STARTUP_VALIDATION'),
+    default=IS_PRODUCTION,
+)
 
 
 SUPPORTED_UPBIT_INTERVALS = {'1s', '1m', '3m', '5m', '10m', '15m', '30m', '60m', '240m'}
 if UPBIT_INTERVAL not in SUPPORTED_UPBIT_INTERVALS:
     UPBIT_INTERVAL = '1s'
+
+
+def runtime_config_issues() -> list[str]:
+    issues: list[str] = []
+    if IS_PRODUCTION and SECRET_KEY == DEFAULT_SECRET_KEY:
+        issues.append('SIGNAL_FLOW_SECRET_KEY must be changed for production')
+    if IS_PRODUCTION and ENABLE_DEMO_SEED:
+        issues.append('SIGNAL_FLOW_ENABLE_DEMO_SEED must be disabled for production')
+    if IS_PRODUCTION and not CORS_ORIGINS:
+        issues.append('SIGNAL_FLOW_CORS_ORIGINS should be configured for production')
+    if PUBLIC_API_BASE_URL and not PUBLIC_WS_BASE_URL:
+        issues.append('SIGNAL_FLOW_PUBLIC_WS_BASE_URL should be set when SIGNAL_FLOW_PUBLIC_API_BASE_URL is set')
+    return issues
+
+
+def enforce_runtime_requirements() -> None:
+    issues = runtime_config_issues()
+    if STRICT_STARTUP_VALIDATION and issues:
+        raise RuntimeError('; '.join(issues))

@@ -12,7 +12,15 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth, client_api, db
 from .broadcaster import Broadcaster
-from .config import APP_NAME, APP_VERSION, BASE_DIR, CORS_ORIGINS
+from .config import (
+    APP_ENV,
+    APP_NAME,
+    APP_VERSION,
+    BASE_DIR,
+    CORS_ORIGINS,
+    enforce_runtime_requirements,
+    runtime_config_issues,
+)
 from .runtime import MarketRuntime
 from .schemas import (
     ClientAssetDetailResponse,
@@ -45,6 +53,7 @@ def _active_interval_type() -> str | None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    enforce_runtime_requirements()
     db.init_db()
     task = asyncio.create_task(runtime.start())
     try:
@@ -77,15 +86,58 @@ def index() -> FileResponse:
     return FileResponse(Path(STATIC_DIR / 'index.html'))
 
 
+@app.get('/manifest.webmanifest')
+def manifest() -> FileResponse:
+    return FileResponse(Path(STATIC_DIR / 'manifest.webmanifest'), media_type='application/manifest+json')
+
+
+@app.get('/sw.js')
+def service_worker() -> FileResponse:
+    return FileResponse(Path(STATIC_DIR / 'sw.js'), media_type='application/javascript')
+
+
+@app.get('/icon.svg')
+def app_icon() -> FileResponse:
+    return FileResponse(Path(STATIC_DIR / 'icon.svg'), media_type='image/svg+xml')
+
+
 @app.get('/api/health')
 def health() -> dict[str, object]:
     status_payload = runtime.status()
+    database = db.database_status()
     return {
         'status': 'ok',
         'version': APP_VERSION,
         'requested_source': status_payload.get('requested_source'),
         'active_source': status_payload.get('active_source'),
         'state': status_payload.get('state'),
+        'database': {
+            'dialect': database['dialect'],
+            'driver': database['driver'],
+            'healthy': database['healthy'],
+        },
+    }
+
+
+@app.get('/api/readiness')
+def readiness() -> dict[str, object]:
+    status_payload = runtime.status()
+    issues = runtime_config_issues()
+    database = db.database_status()
+    ready = (
+        status_payload.get('state') in {'streaming', 'connecting', 'reconnecting'}
+        and not issues
+        and database['healthy']
+    )
+    return {
+        'status': 'ready' if ready else 'not_ready',
+        'version': APP_VERSION,
+        'environment': APP_ENV,
+        'requested_source': status_payload.get('requested_source'),
+        'active_source': status_payload.get('active_source'),
+        'state': status_payload.get('state'),
+        'issues': issues,
+        'database': database,
     }
 
 

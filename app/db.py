@@ -1,13 +1,133 @@
 from __future__ import annotations
 
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Iterator
 
-from .config import DB_PATH, DEMO_EMAIL, DEMO_PASSWORD, DEMO_USER, MARKETS
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    delete,
+    func,
+    insert,
+    select,
+    text,
+)
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.engine import Connection, Engine, make_url
+
+from .config import DATABASE_URL, DB_PATH, DEMO_EMAIL, DEMO_PASSWORD, DEMO_USER, ENABLE_DEMO_SEED, MARKETS
 
 UTC = timezone.utc
+
+metadata = MetaData()
+
+assets = Table(
+    'assets',
+    metadata,
+    Column('symbol', String(50), primary_key=True),
+    Column('name', String(255), nullable=False),
+    Column('market_type', String(50), nullable=False),
+    Column('last_price', Float, nullable=False),
+    Column('change_rate', Float, nullable=False, server_default='0'),
+    Column('updated_at', String(64), nullable=False),
+)
+
+candles = Table(
+    'candles',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('symbol', String(50), nullable=False),
+    Column('candle_time', String(64), nullable=False),
+    Column('interval_type', String(32), nullable=False),
+    Column('open_price', Float, nullable=False),
+    Column('high_price', Float, nullable=False),
+    Column('low_price', Float, nullable=False),
+    Column('close_price', Float, nullable=False),
+    Column('volume', Float, nullable=False),
+    UniqueConstraint('symbol', 'candle_time', 'interval_type', name='uq_candles_symbol_time_interval'),
+)
+
+strategies = Table(
+    'strategies',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('name', String(255), nullable=False),
+    Column('rule_type', String(64), nullable=False),
+    Column('is_active', Integer, nullable=False, server_default='1'),
+    Column('rsi_buy_threshold', Float),
+    Column('rsi_sell_threshold', Float),
+    Column('volume_multiplier', Float),
+    Column('score_threshold', Float),
+    Column('created_at', String(64), nullable=False),
+)
+
+signals = Table(
+    'signals',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('symbol', String(50), nullable=False),
+    Column('signal_type', String(16), nullable=False),
+    Column('strategy_name', String(255), nullable=False),
+    Column('score', Float, nullable=False),
+    Column('reason', Text, nullable=False),
+    Column('price', Float, nullable=False),
+    Column('created_at', String(64), nullable=False),
+)
+
+users = Table(
+    'users',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('username', String(64), nullable=False, unique=True),
+    Column('email', String(255), nullable=False, unique=True),
+    Column('password_hash', String(255), nullable=False),
+    Column('created_at', String(64), nullable=False),
+)
+
+watchlists = Table(
+    'watchlists',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('user_name', String(64), nullable=False),
+    Column('symbol', String(50), nullable=False),
+    Column('created_at', String(64), nullable=False),
+    UniqueConstraint('user_name', 'symbol', name='uq_watchlists_user_symbol'),
+)
+
+notification_settings = Table(
+    'notification_settings',
+    metadata,
+    Column('user_name', String(64), primary_key=True),
+    Column('web_enabled', Integer, nullable=False, server_default='1'),
+    Column('email_enabled', Integer, nullable=False, server_default='0'),
+    Column('updated_at', String(64), nullable=False),
+)
+
+notifications = Table(
+    'notifications',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('user_name', String(64), nullable=False),
+    Column('signal_id', Integer, ForeignKey('signals.id'), nullable=False),
+    Column('is_read', Integer, nullable=False, server_default='0'),
+    Column('read_at', String(64)),
+    Column('created_at', String(64), nullable=False),
+    UniqueConstraint('user_name', 'signal_id', name='uq_notifications_user_signal'),
+)
+
+_ENGINE: Engine | None = None
+_ENGINE_URL: str | None = None
 
 
 def utc_now() -> datetime:
@@ -18,252 +138,283 @@ def isoformat(dt: datetime) -> str:
     return dt.astimezone(UTC).isoformat()
 
 
-@contextmanager
-def get_conn() -> Iterator[sqlite3.Connection]:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
+def _sqlite_database_url(path: Path) -> str:
+    return f"sqlite:///{path.resolve().as_posix()}"
+
+
+def get_database_url() -> str:
+    if DATABASE_URL:
+        return DATABASE_URL
+    return _sqlite_database_url(Path(DB_PATH))
+
+
+def describe_database_url() -> str:
+    return make_url(get_database_url()).render_as_string(hide_password=True)
+
+
+def get_engine() -> Engine:
+    global _ENGINE, _ENGINE_URL
+    database_url = get_database_url()
+    if _ENGINE is not None and _ENGINE_URL == database_url:
+        return _ENGINE
+
+    if _ENGINE is not None:
+        _ENGINE.dispose()
+
+    engine_kwargs: dict[str, Any] = {'future': True, 'pool_pre_ping': True}
+    if database_url.startswith('sqlite'):
+        engine_kwargs['connect_args'] = {'check_same_thread': False}
+
+    _ENGINE = create_engine(database_url, **engine_kwargs)
+    _ENGINE_URL = database_url
+    return _ENGINE
+
+
+def database_status() -> dict[str, Any]:
+    engine = get_engine()
+    status = {
+        'url': describe_database_url(),
+        'dialect': engine.dialect.name,
+        'driver': engine.dialect.driver,
+        'healthy': False,
+        'error': None,
+    }
     try:
+        with engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
+        status['healthy'] = True
+    except Exception as exc:
+        status['error'] = str(exc)
+    return status
+
+
+@contextmanager
+def get_conn() -> Iterator[Connection]:
+    with get_engine().begin() as conn:
         yield conn
-        conn.commit()
-    finally:
-        conn.close()
+
+
+def _prepare_query(query: str, params: tuple[Any, ...] | dict[str, Any] = ()) -> tuple[Any, dict[str, Any]]:
+    if isinstance(params, dict):
+        return text(query), params
+
+    if not params:
+        return text(query), {}
+
+    placeholders = query.count('?')
+    if placeholders != len(params):
+        raise ValueError('Positional parameter count does not match placeholder count')
+
+    pieces = query.split('?')
+    rendered = pieces[0]
+    bindings: dict[str, Any] = {}
+    for idx, value in enumerate(params):
+        key = f'p{idx}'
+        rendered += f':{key}{pieces[idx + 1]}'
+        bindings[key] = value
+    return text(rendered), bindings
+
+
+def _dialect_insert(conn: Connection, table: Table, values: dict[str, Any]):
+    if conn.dialect.name == 'postgresql':
+        return postgresql_insert(table).values(**values)
+    return sqlite_insert(table).values(**values)
+
+
+def _row_to_dict(row: Any) -> dict[str, Any]:
+    return dict(row._mapping)
 
 
 def init_db() -> None:
-    with get_conn() as conn:
-        conn.executescript(
-            '''
-            PRAGMA journal_mode=WAL;
-
-            CREATE TABLE IF NOT EXISTS assets (
-                symbol TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                market_type TEXT NOT NULL,
-                last_price REAL NOT NULL,
-                change_rate REAL NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS candles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol TEXT NOT NULL,
-                candle_time TEXT NOT NULL,
-                interval_type TEXT NOT NULL,
-                open_price REAL NOT NULL,
-                high_price REAL NOT NULL,
-                low_price REAL NOT NULL,
-                close_price REAL NOT NULL,
-                volume REAL NOT NULL,
-                UNIQUE(symbol, candle_time, interval_type)
-            );
-
-            CREATE TABLE IF NOT EXISTS strategies (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                rule_type TEXT NOT NULL,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                rsi_buy_threshold REAL,
-                rsi_sell_threshold REAL,
-                volume_multiplier REAL,
-                score_threshold REAL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS signals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol TEXT NOT NULL,
-                signal_type TEXT NOT NULL,
-                strategy_name TEXT NOT NULL,
-                score REAL NOT NULL,
-                reason TEXT NOT NULL,
-                price REAL NOT NULL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS watchlists (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_name TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                UNIQUE(user_name, symbol)
-            );
-
-            CREATE TABLE IF NOT EXISTS notification_settings (
-                user_name TEXT PRIMARY KEY,
-                web_enabled INTEGER NOT NULL DEFAULT 1,
-                email_enabled INTEGER NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_name TEXT NOT NULL,
-                signal_id INTEGER NOT NULL,
-                is_read INTEGER NOT NULL DEFAULT 0,
-                read_at TEXT,
-                created_at TEXT NOT NULL,
-                UNIQUE(user_name, signal_id),
-                FOREIGN KEY(signal_id) REFERENCES signals(id)
-            );
-            '''
-        )
+    engine = get_engine()
+    with engine.begin() as conn:
+        if conn.dialect.name == 'sqlite':
+            conn.exec_driver_sql('PRAGMA foreign_keys=ON')
+            conn.exec_driver_sql('PRAGMA journal_mode=WAL')
+        metadata.create_all(conn)
         seed_assets(conn)
         seed_strategies(conn)
-        seed_demo_user(conn)
-        seed_watchlist(conn)
-        ensure_notification_settings(conn, DEMO_USER)
+        if ENABLE_DEMO_SEED:
+            seed_demo_user(conn)
+            seed_watchlist(conn)
+            ensure_notification_settings(conn, DEMO_USER)
 
 
-def seed_assets(conn: sqlite3.Connection) -> None:
+def seed_assets(conn: Connection) -> None:
     now = isoformat(utc_now())
     for symbol, meta in MARKETS.items():
-        conn.execute(
-            '''
-            INSERT INTO assets(symbol, name, market_type, last_price, change_rate, updated_at)
-            VALUES (?, ?, ?, ?, 0, ?)
-            ON CONFLICT(symbol)
-            DO UPDATE SET name = excluded.name,
-                          market_type = excluded.market_type,
-                          updated_at = excluded.updated_at
-            ''',
-            (symbol, meta['name'], meta['market_type'], meta['base_price'], now),
+        values = {
+            'symbol': symbol,
+            'name': meta['name'],
+            'market_type': meta['market_type'],
+            'last_price': meta['base_price'],
+            'change_rate': 0.0,
+            'updated_at': now,
+        }
+        stmt = _dialect_insert(conn, assets, values).on_conflict_do_update(
+            index_elements=['symbol'],
+            set_={
+                'name': values['name'],
+                'market_type': values['market_type'],
+                'updated_at': values['updated_at'],
+            },
         )
+        conn.execute(stmt)
 
 
-def seed_strategies(conn: sqlite3.Connection) -> None:
-    existing = conn.execute('SELECT COUNT(*) AS count FROM strategies').fetchone()['count']
+def seed_strategies(conn: Connection) -> None:
+    existing = conn.execute(select(func.count()).select_from(strategies)).scalar_one()
     if existing:
         return
 
     now = isoformat(utc_now())
-    conn.executemany(
-        '''
-        INSERT INTO strategies(
-            name, rule_type, is_active, rsi_buy_threshold, rsi_sell_threshold,
-            volume_multiplier, score_threshold, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''',
+    conn.execute(
+        insert(strategies),
         [
-            ('RSI Reversion', 'rsi_reversion', 1, 35, 68, 1.2, None, now),
-            ('Golden Cross', 'golden_cross', 1, None, None, None, None, now),
-            ('Score Combo', 'score_combo', 1, 40, None, 1.3, 70, now),
+            {
+                'name': 'RSI Reversion',
+                'rule_type': 'rsi_reversion',
+                'is_active': 1,
+                'rsi_buy_threshold': 35,
+                'rsi_sell_threshold': 68,
+                'volume_multiplier': 1.2,
+                'score_threshold': None,
+                'created_at': now,
+            },
+            {
+                'name': 'Golden Cross',
+                'rule_type': 'golden_cross',
+                'is_active': 1,
+                'rsi_buy_threshold': None,
+                'rsi_sell_threshold': None,
+                'volume_multiplier': None,
+                'score_threshold': None,
+                'created_at': now,
+            },
+            {
+                'name': 'Score Combo',
+                'rule_type': 'score_combo',
+                'is_active': 1,
+                'rsi_buy_threshold': 40,
+                'rsi_sell_threshold': None,
+                'volume_multiplier': 1.3,
+                'score_threshold': 70,
+                'created_at': now,
+            },
         ],
     )
 
 
-def seed_demo_user(conn: sqlite3.Connection) -> None:
+def seed_demo_user(conn: Connection) -> None:
     from .auth import hash_password
 
-    existing = conn.execute('SELECT username FROM users WHERE username = ?', (DEMO_USER,)).fetchone()
+    existing = conn.execute(select(users.c.username).where(users.c.username == DEMO_USER)).first()
     if existing:
         return
     conn.execute(
-        '''
-        INSERT INTO users(username, email, password_hash, created_at)
-        VALUES (?, ?, ?, ?)
-        ''',
-        (DEMO_USER, DEMO_EMAIL, hash_password(DEMO_PASSWORD), isoformat(utc_now())),
+        insert(users).values(
+            username=DEMO_USER,
+            email=DEMO_EMAIL,
+            password_hash=hash_password(DEMO_PASSWORD),
+            created_at=isoformat(utc_now()),
+        )
     )
 
 
-def seed_watchlist(conn: sqlite3.Connection) -> None:
+def seed_watchlist(conn: Connection) -> None:
     now = isoformat(utc_now())
     for symbol in ('KRW-BTC', 'KRW-ETH'):
         if symbol not in MARKETS:
             continue
-        conn.execute(
-            '''
-            INSERT INTO watchlists(user_name, symbol, created_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_name, symbol) DO NOTHING
-            ''',
-            (DEMO_USER, symbol, now),
-        )
+        stmt = _dialect_insert(
+            conn,
+            watchlists,
+            {
+                'user_name': DEMO_USER,
+                'symbol': symbol,
+                'created_at': now,
+            },
+        ).on_conflict_do_nothing(index_elements=['user_name', 'symbol'])
+        conn.execute(stmt)
 
 
-def fetch_all(query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+def fetch_all(query: str, params: tuple[Any, ...] | dict[str, Any] = ()) -> list[dict[str, Any]]:
+    statement, bindings = _prepare_query(query, params)
     with get_conn() as conn:
-        rows = conn.execute(query, params).fetchall()
+        rows = conn.execute(statement, bindings).mappings().all()
         return [dict(row) for row in rows]
 
 
-def fetch_one(query: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
+def fetch_one(query: str, params: tuple[Any, ...] | dict[str, Any] = ()) -> dict[str, Any] | None:
+    statement, bindings = _prepare_query(query, params)
     with get_conn() as conn:
-        row = conn.execute(query, params).fetchone()
+        row = conn.execute(statement, bindings).mappings().first()
         return dict(row) if row else None
 
 
-def execute(query: str, params: tuple[Any, ...] = ()) -> None:
+def execute(query: str, params: tuple[Any, ...] | dict[str, Any] = ()) -> None:
+    statement, bindings = _prepare_query(query, params)
     with get_conn() as conn:
-        conn.execute(query, params)
+        conn.execute(statement, bindings)
 
 
 def get_user_by_username(username: str) -> dict[str, Any] | None:
-    return fetch_one('SELECT * FROM users WHERE username = ?', (username,))
+    with get_conn() as conn:
+        row = conn.execute(select(users).where(users.c.username == username)).mappings().first()
+        return dict(row) if row else None
 
 
 def create_user(*, username: str, email: str, password_hash: str) -> dict[str, Any]:
     now = isoformat(utc_now())
     with get_conn() as conn:
         conn.execute(
-            '''
-            INSERT INTO users(username, email, password_hash, created_at)
-            VALUES (?, ?, ?, ?)
-            ''',
-            (username, email, password_hash, now),
+            insert(users).values(
+                username=username,
+                email=email,
+                password_hash=password_hash,
+                created_at=now,
+            )
         )
-    ensure_notification_settings(None, username)
-    user = fetch_one('SELECT id, username, email, created_at FROM users WHERE username = ?', (username,))
-    assert user is not None
-    return user
+        ensure_notification_settings(conn, username)
+        row = conn.execute(
+            select(users.c.id, users.c.username, users.c.email, users.c.created_at).where(users.c.username == username)
+        ).mappings().first()
+    assert row is not None
+    return dict(row)
 
 
-def ensure_notification_settings(conn: sqlite3.Connection | None, user_name: str) -> None:
+def ensure_notification_settings(conn: Connection | None, user_name: str) -> None:
     now = isoformat(utc_now())
-    if conn is not None:
-        conn.execute(
-            '''
-            INSERT INTO notification_settings(user_name, web_enabled, email_enabled, updated_at)
-            VALUES (?, 1, 0, ?)
-            ON CONFLICT(user_name) DO NOTHING
-            ''',
-            (user_name, now),
-        )
-        return
-    with get_conn() as owned_conn:
-        owned_conn.execute(
-            '''
-            INSERT INTO notification_settings(user_name, web_enabled, email_enabled, updated_at)
-            VALUES (?, 1, 0, ?)
-            ON CONFLICT(user_name) DO NOTHING
-            ''',
-            (user_name, now),
-        )
+    owns_connection = conn is None
+    if owns_connection:
+        conn_ctx = get_conn()
+        conn = conn_ctx.__enter__()
+    try:
+        stmt = _dialect_insert(
+            conn,
+            notification_settings,
+            {
+                'user_name': user_name,
+                'web_enabled': 1,
+                'email_enabled': 0,
+                'updated_at': now,
+            },
+        ).on_conflict_do_nothing(index_elements=['user_name'])
+        conn.execute(stmt)
+    finally:
+        if owns_connection:
+            conn_ctx.__exit__(None, None, None)
 
 
 def get_notification_settings(user_name: str) -> dict[str, Any]:
     ensure_notification_settings(None, user_name)
-    settings = fetch_one(
-        '''
-        SELECT user_name, web_enabled, email_enabled, updated_at
-        FROM notification_settings
-        WHERE user_name = ?
-        ''',
-        (user_name,),
-    )
+    with get_conn() as conn:
+        settings = conn.execute(select(notification_settings).where(notification_settings.c.user_name == user_name)).mappings().first()
     assert settings is not None
-    settings['web_enabled'] = bool(settings['web_enabled'])
-    settings['email_enabled'] = bool(settings['email_enabled'])
-    return settings
+    payload = dict(settings)
+    payload['web_enabled'] = bool(payload['web_enabled'])
+    payload['email_enabled'] = bool(payload['email_enabled'])
+    return payload
 
 
 def update_notification_settings(
@@ -275,17 +426,25 @@ def update_notification_settings(
     current = get_notification_settings(user_name)
     next_web = current['web_enabled'] if web_enabled is None else web_enabled
     next_email = current['email_enabled'] if email_enabled is None else email_enabled
-    execute(
-        '''
-        INSERT INTO notification_settings(user_name, web_enabled, email_enabled, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_name)
-        DO UPDATE SET web_enabled = excluded.web_enabled,
-                      email_enabled = excluded.email_enabled,
-                      updated_at = excluded.updated_at
-        ''',
-        (user_name, int(next_web), int(next_email), isoformat(utc_now())),
-    )
+    with get_conn() as conn:
+        stmt = _dialect_insert(
+            conn,
+            notification_settings,
+            {
+                'user_name': user_name,
+                'web_enabled': int(next_web),
+                'email_enabled': int(next_email),
+                'updated_at': isoformat(utc_now()),
+            },
+        ).on_conflict_do_update(
+            index_elements=['user_name'],
+            set_={
+                'web_enabled': int(next_web),
+                'email_enabled': int(next_email),
+                'updated_at': isoformat(utc_now()),
+            },
+        )
+        conn.execute(stmt)
     return get_notification_settings(user_name)
 
 
@@ -303,17 +462,22 @@ def get_watchlist_for_user(user_name: str) -> list[dict[str, Any]]:
 
 
 def add_watchlist_item(user_name: str, symbol: str) -> None:
-    execute(
-        '''
-        INSERT OR IGNORE INTO watchlists(user_name, symbol, created_at)
-        VALUES (?, ?, ?)
-        ''',
-        (user_name, symbol, isoformat(utc_now())),
-    )
+    with get_conn() as conn:
+        stmt = _dialect_insert(
+            conn,
+            watchlists,
+            {
+                'user_name': user_name,
+                'symbol': symbol,
+                'created_at': isoformat(utc_now()),
+            },
+        ).on_conflict_do_nothing(index_elements=['user_name', 'symbol'])
+        conn.execute(stmt)
 
 
 def delete_watchlist_item(user_name: str, symbol: str) -> None:
-    execute('DELETE FROM watchlists WHERE user_name = ? AND symbol = ?', (user_name, symbol))
+    with get_conn() as conn:
+        conn.execute(delete(watchlists).where(watchlists.c.user_name == user_name, watchlists.c.symbol == symbol))
 
 
 def upsert_asset(
@@ -325,19 +489,30 @@ def upsert_asset(
     change_rate: float = 0.0,
     updated_at: str | None = None,
 ) -> None:
-    execute(
-        '''
-        INSERT INTO assets(symbol, name, market_type, last_price, change_rate, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(symbol)
-        DO UPDATE SET name = excluded.name,
-                      market_type = excluded.market_type,
-                      last_price = excluded.last_price,
-                      change_rate = excluded.change_rate,
-                      updated_at = excluded.updated_at
-        ''',
-        (symbol, name, market_type, last_price, change_rate, updated_at or isoformat(utc_now())),
-    )
+    effective_updated_at = updated_at or isoformat(utc_now())
+    with get_conn() as conn:
+        stmt = _dialect_insert(
+            conn,
+            assets,
+            {
+                'symbol': symbol,
+                'name': name,
+                'market_type': market_type,
+                'last_price': last_price,
+                'change_rate': change_rate,
+                'updated_at': effective_updated_at,
+            },
+        ).on_conflict_do_update(
+            index_elements=['symbol'],
+            set_={
+                'name': name,
+                'market_type': market_type,
+                'last_price': last_price,
+                'change_rate': change_rate,
+                'updated_at': effective_updated_at,
+            },
+        )
+        conn.execute(stmt)
 
 
 def update_asset_price(
@@ -380,21 +555,31 @@ def upsert_candle(
     close_price: float,
     volume: float,
 ) -> None:
-    execute(
-        '''
-        INSERT INTO candles(
-            symbol, candle_time, interval_type, open_price, high_price, low_price, close_price, volume
+    with get_conn() as conn:
+        stmt = _dialect_insert(
+            conn,
+            candles,
+            {
+                'symbol': symbol,
+                'candle_time': candle_time,
+                'interval_type': interval_type,
+                'open_price': open_price,
+                'high_price': high_price,
+                'low_price': low_price,
+                'close_price': close_price,
+                'volume': volume,
+            },
+        ).on_conflict_do_update(
+            index_elements=['symbol', 'candle_time', 'interval_type'],
+            set_={
+                'open_price': open_price,
+                'high_price': high_price,
+                'low_price': low_price,
+                'close_price': close_price,
+                'volume': volume,
+            },
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(symbol, candle_time, interval_type)
-        DO UPDATE SET open_price = excluded.open_price,
-                      high_price = excluded.high_price,
-                      low_price = excluded.low_price,
-                      close_price = excluded.close_price,
-                      volume = excluded.volume
-        ''',
-        (symbol, candle_time, interval_type, open_price, high_price, low_price, close_price, volume),
-    )
+        conn.execute(stmt)
 
 
 def fetch_recent_candles(symbol: str, limit: int = 120, interval_type: str | None = None) -> list[dict[str, Any]]:
@@ -442,54 +627,63 @@ def insert_signal_if_new(
     threshold = isoformat(utc_now() - timedelta(seconds=dedup_seconds))
     with get_conn() as conn:
         recent = conn.execute(
-            '''
-            SELECT id
-            FROM signals
-            WHERE symbol = ?
-              AND signal_type = ?
-              AND strategy_name = ?
-              AND created_at >= ?
-            ORDER BY created_at DESC
-            LIMIT 1
-            ''',
-            (symbol, signal_type, strategy_name, threshold),
-        ).fetchone()
+            select(signals.c.id)
+            .where(
+                signals.c.symbol == symbol,
+                signals.c.signal_type == signal_type,
+                signals.c.strategy_name == strategy_name,
+                signals.c.created_at >= threshold,
+            )
+            .order_by(signals.c.created_at.desc())
+            .limit(1)
+        ).first()
         if recent:
             return None
-        cursor = conn.execute(
-            '''
-            INSERT INTO signals(symbol, signal_type, strategy_name, score, reason, price, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''',
-            (symbol, signal_type, strategy_name, score, reason, price, isoformat(utc_now())),
+        result = conn.execute(
+            insert(signals).values(
+                symbol=symbol,
+                signal_type=signal_type,
+                strategy_name=strategy_name,
+                score=score,
+                reason=reason,
+                price=price,
+                created_at=isoformat(utc_now()),
+            )
         )
-        signal_id = cursor.lastrowid
+        signal_id = result.inserted_primary_key[0]
     return fetch_one('SELECT * FROM signals WHERE id = ?', (signal_id,))
 
 
 def create_notifications_for_signal(signal_id: int, symbol: str) -> int:
     with get_conn() as conn:
         watchers = conn.execute(
-            '''
-            SELECT w.user_name
-            FROM watchlists w
-            JOIN notification_settings ns ON ns.user_name = w.user_name
-            WHERE w.symbol = ?
-              AND ns.web_enabled = 1
-            ''',
-            (symbol,),
-        ).fetchall()
+            text(
+                '''
+                SELECT w.user_name
+                FROM watchlists w
+                JOIN notification_settings ns ON ns.user_name = w.user_name
+                WHERE w.symbol = :symbol
+                  AND ns.web_enabled = 1
+                '''
+            ),
+            {'symbol': symbol},
+        ).mappings().all()
         inserted_count = 0
         now = isoformat(utc_now())
         for row in watchers:
-            cursor = conn.execute(
-                '''
-                INSERT OR IGNORE INTO notifications(user_name, signal_id, is_read, read_at, created_at)
-                VALUES (?, ?, 0, NULL, ?)
-                ''',
-                (row['user_name'], signal_id, now),
-            )
-            inserted_count += cursor.rowcount > 0
+            stmt = _dialect_insert(
+                conn,
+                notifications,
+                {
+                    'user_name': row['user_name'],
+                    'signal_id': signal_id,
+                    'is_read': 0,
+                    'read_at': None,
+                    'created_at': now,
+                },
+            ).on_conflict_do_nothing(index_elements=['user_name', 'signal_id'])
+            result = conn.execute(stmt)
+            inserted_count += int(bool(result.rowcount and result.rowcount > 0))
         return inserted_count
 
 
@@ -522,13 +716,16 @@ def fetch_notifications(user_name: str, limit: int = 30) -> list[dict[str, Any]]
 def mark_notification_read(user_name: str, notification_id: int) -> bool:
     with get_conn() as conn:
         current = conn.execute(
-            'SELECT id FROM notifications WHERE id = ? AND user_name = ?',
-            (notification_id, user_name),
-        ).fetchone()
+            select(notifications.c.id).where(
+                notifications.c.id == notification_id,
+                notifications.c.user_name == user_name,
+            )
+        ).first()
         if not current:
             return False
         conn.execute(
-            'UPDATE notifications SET is_read = 1, read_at = ? WHERE id = ? AND user_name = ?',
-            (isoformat(utc_now()), notification_id, user_name),
+            notifications.update()
+            .where(notifications.c.id == notification_id, notifications.c.user_name == user_name)
+            .values(is_read=1, read_at=isoformat(utc_now()))
         )
         return True
