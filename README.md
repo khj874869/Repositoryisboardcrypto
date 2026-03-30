@@ -151,6 +151,7 @@ pytest -q
 - PWA release guide: [`docs/PWA_RELEASE_GUIDE.md`](docs/PWA_RELEASE_GUIDE.md)
 - HTTPS deployment guide: [`docs/HTTPS_DEPLOYMENT_GUIDE.md`](docs/HTTPS_DEPLOYMENT_GUIDE.md)
 - Production compose stack: [`docker-compose.production.yml`](docker-compose.production.yml)
+- Production env generator: [`scripts/generate-production-env.ps1`](scripts/generate-production-env.ps1)
 
 ## Database Migration Foundation
 

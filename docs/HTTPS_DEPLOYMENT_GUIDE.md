@@ -16,6 +16,35 @@ SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS=
 
 You can start from [`../.env.production.example`](../.env.production.example).
 
+## Generate `.env.production`
+
+If you already know the public domain and the production PostgreSQL URL, generate a ready-to-use file:
+
+```powershell
+.\scripts\generate-production-env.ps1 `
+  -Domain signals.example.com `
+  -DatabaseUrl "postgresql+psycopg://signalflow:password@db-host:5432/signal_flow"
+```
+
+The generator will:
+
+- create `.env.production`
+- generate a strong `SIGNAL_FLOW_SECRET_KEY`
+- derive `SIGNAL_FLOW_PUBLIC_WEB_BASE_URL`
+- derive `SIGNAL_FLOW_PUBLIC_API_BASE_URL`
+- derive `SIGNAL_FLOW_PUBLIC_WS_BASE_URL`
+- derive a default Android package name from the domain
+
+If you already have a package name or signing fingerprints:
+
+```powershell
+.\scripts\generate-production-env.ps1 `
+  -Domain signals.example.com `
+  -DatabaseUrl "postgresql+psycopg://signalflow:password@db-host:5432/signal_flow" `
+  -AndroidPackageName com.example.signals.signalflow `
+  -AndroidSha256CertFingerprints "AA:BB:CC:DD"
+```
+
 ## Deploy
 
 Start the production stack:
