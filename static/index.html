@@ -60,6 +60,9 @@
         <div class="card"><div class="muted">Last Message</div><strong id="last-message-at">-</strong></div>
         <div class="card"><div class="muted">API Base</div><strong id="api-base-value">-</strong></div>
         <div class="card"><div class="muted">WebSocket URL</div><strong id="ws-url-value">-</strong></div>
+        <div class="card"><div class="muted">Secure Context</div><strong id="secure-context-status">Checking</strong></div>
+        <div class="card"><div class="muted">Service Worker</div><strong id="service-worker-status">Checking</strong></div>
+        <div class="card"><div class="muted">Android Asset Links</div><strong id="asset-links-status">Checking</strong></div>
       </div>
       <p id="runtime-error" class="muted" style="margin-top:12px;">No runtime errors reported.</p>
     </section>
@@ -135,7 +138,7 @@
   </main>
 
   <script>
-    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, installPrompt: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
+    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, installPrompt: null, release: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
     const el = id => document.getElementById(id);
     const fmtNum = value => value == null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
     const fmtPct = value => value == null ? '-' : `${value.toFixed(2)}%`;
@@ -187,6 +190,17 @@
       el('install-button').disabled = true;
     }
 
+    function renderReleaseStatus(data) {
+      state.release = data;
+      el('secure-context-status').textContent = window.isSecureContext ? 'HTTPS / secure' : 'Not secure';
+      el('service-worker-status').textContent = navigator.serviceWorker?.controller ? 'Active' : 'Registered only';
+      el('asset-links-status').textContent = data.android.assetlinks_ready ? 'Configured' : 'Not configured';
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        el('runtime-warning').style.display = 'block';
+        el('runtime-warning').textContent = 'Hosted install mode requires HTTPS. Current page is not in a secure context.';
+      }
+    }
+
     function renderWatchlist(rows) {
       el('watch-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${row.symbol}</td><td>${fmtNum(row.last_price)}</td><td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</td><td><button class="secondary watch-remove" data-symbol="${row.symbol}">Remove</button></td></tr>`).join('') : '<tr><td colspan="4" class="muted">No watchlist items.</td></tr>';
     }
@@ -232,6 +246,11 @@
       if (state.selectedSymbol) { await loadDetail(state.selectedSymbol); renderOverview(data.overview); }
     }
 
+    async function loadReleaseStatus() {
+      const data = await requestJson('/api/release-status');
+      renderReleaseStatus(data);
+    }
+
     async function loadDetail(symbol) { state.selectedSymbol = symbol; const data = await requestJson(assetUrl(symbol)); renderDetail(data); }
     async function refreshAll() { try { await loadBootstrap(); await loadDashboard(); } catch (error) { msg(error.message, true); } }
     function scheduleRefresh() { if (state.refreshTimer) return; state.refreshTimer = setTimeout(async () => { state.refreshTimer = null; await refreshAll(); }, 350); }
@@ -272,6 +291,7 @@
         await navigator.serviceWorker.register('/sw.js');
       } catch (_) {
       }
+      if (state.release) renderReleaseStatus(state.release);
     }
 
     el('login-button').addEventListener('click', login); el('signup-button').addEventListener('click', signup); el('logout-button').addEventListener('click', logout); el('refresh-button').addEventListener('click', refreshAll); el('watch-add-button').addEventListener('click', addWatch); el('settings-save-button').addEventListener('click', saveSettings); el('install-button').addEventListener('click', installApp);
@@ -281,7 +301,7 @@
     window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); state.installPrompt = event; renderInstallState(); });
     window.addEventListener('appinstalled', () => { state.installPrompt = null; renderInstallState(); });
 
-    (async () => { renderInstallState(); await registerServiceWorker(); await refreshAll(); connectSocket(); })();
+    (async () => { renderInstallState(); await registerServiceWorker(); await refreshAll(); await loadReleaseStatus(); connectSocket(); })();
   </script>
 </body>
 </html>

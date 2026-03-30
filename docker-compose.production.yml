@@ -1,0 +1,41 @@
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    environment:
+      SIGNAL_FLOW_APP_ENV: production
+      SIGNAL_FLOW_STRICT_STARTUP_VALIDATION: "true"
+      SIGNAL_FLOW_ENABLE_DEMO_SEED: "false"
+      DATABASE_URL: ${DATABASE_URL}
+      SIGNAL_FLOW_SECRET_KEY: ${SIGNAL_FLOW_SECRET_KEY}
+      SIGNAL_FLOW_CORS_ORIGINS: https://${SIGNAL_FLOW_DOMAIN}
+      SIGNAL_FLOW_PUBLIC_WEB_BASE_URL: https://${SIGNAL_FLOW_DOMAIN}
+      SIGNAL_FLOW_PUBLIC_API_BASE_URL: https://${SIGNAL_FLOW_DOMAIN}
+      SIGNAL_FLOW_PUBLIC_WS_BASE_URL: wss://${SIGNAL_FLOW_DOMAIN}/ws/stream
+      SIGNAL_FLOW_ANDROID_PACKAGE_NAME: ${SIGNAL_FLOW_ANDROID_PACKAGE_NAME:-}
+      SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS: ${SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS:-}
+    volumes:
+      - signal_flow_data:/app/data
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      SIGNAL_FLOW_DOMAIN: ${SIGNAL_FLOW_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  signal_flow_data:
+  caddy_data:
+  caddy_config:

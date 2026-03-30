@@ -93,8 +93,11 @@ UPBIT_WS_PING_TIMEOUT_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_WS_PING_TIMEO
 UPBIT_RECONNECT_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_RECONNECT_SECONDS', '2'))
 MARKET_SNAPSHOT_PUSH_SECONDS = float(os.getenv('SIGNAL_FLOW_MARKET_SNAPSHOT_PUSH_SECONDS', '1'))
 PUBLIC_API_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_API_BASE_URL', '').strip().rstrip('/')
+PUBLIC_WEB_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_WEB_BASE_URL', '').strip().rstrip('/')
 PUBLIC_WS_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_WS_BASE_URL', '').strip().rstrip('/')
 CORS_ORIGINS = _parse_csv(os.getenv('SIGNAL_FLOW_CORS_ORIGINS'))
+ANDROID_PACKAGE_NAME = os.getenv('SIGNAL_FLOW_ANDROID_PACKAGE_NAME', '').strip()
+ANDROID_SHA256_CERT_FINGERPRINTS = _parse_csv(os.getenv('SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS'))
 ENABLE_DEMO_SEED = _is_truthy(os.getenv('SIGNAL_FLOW_ENABLE_DEMO_SEED'), default=not IS_PRODUCTION)
 STRICT_STARTUP_VALIDATION = _is_truthy(
     os.getenv('SIGNAL_FLOW_STRICT_STARTUP_VALIDATION'),
@@ -115,8 +118,22 @@ def runtime_config_issues() -> list[str]:
         issues.append('SIGNAL_FLOW_ENABLE_DEMO_SEED must be disabled for production')
     if IS_PRODUCTION and not CORS_ORIGINS:
         issues.append('SIGNAL_FLOW_CORS_ORIGINS should be configured for production')
+    if IS_PRODUCTION and not PUBLIC_WEB_BASE_URL:
+        issues.append('SIGNAL_FLOW_PUBLIC_WEB_BASE_URL should be set for production')
+    if IS_PRODUCTION and not PUBLIC_API_BASE_URL:
+        issues.append('SIGNAL_FLOW_PUBLIC_API_BASE_URL should be set for production')
+    if IS_PRODUCTION and not PUBLIC_WS_BASE_URL:
+        issues.append('SIGNAL_FLOW_PUBLIC_WS_BASE_URL should be set for production')
     if PUBLIC_API_BASE_URL and not PUBLIC_WS_BASE_URL:
         issues.append('SIGNAL_FLOW_PUBLIC_WS_BASE_URL should be set when SIGNAL_FLOW_PUBLIC_API_BASE_URL is set')
+    if PUBLIC_WEB_BASE_URL and not PUBLIC_WEB_BASE_URL.startswith('https://'):
+        issues.append('SIGNAL_FLOW_PUBLIC_WEB_BASE_URL must use https://')
+    if PUBLIC_API_BASE_URL and not PUBLIC_API_BASE_URL.startswith('https://'):
+        issues.append('SIGNAL_FLOW_PUBLIC_API_BASE_URL must use https://')
+    if PUBLIC_WS_BASE_URL and not PUBLIC_WS_BASE_URL.startswith('wss://'):
+        issues.append('SIGNAL_FLOW_PUBLIC_WS_BASE_URL must use wss://')
+    if ANDROID_PACKAGE_NAME and not ANDROID_SHA256_CERT_FINGERPRINTS:
+        issues.append('SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS should be set when SIGNAL_FLOW_ANDROID_PACKAGE_NAME is set')
     return issues
 
 

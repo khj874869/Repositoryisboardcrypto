@@ -131,9 +131,12 @@ Returns:
 - `SIGNAL_FLOW_UPBIT_INTERVAL=1s|1m|3m|5m|10m|15m|30m|60m|240m`
 - `SIGNAL_FLOW_UPBIT_BOOTSTRAP_COUNT=120`
 - `SIGNAL_FLOW_SOURCE_FALLBACK_TO_SIMULATOR=true`
+- `SIGNAL_FLOW_PUBLIC_WEB_BASE_URL=https://signals.example.com`
 - `SIGNAL_FLOW_PUBLIC_API_BASE_URL=https://api.example.com`
 - `SIGNAL_FLOW_PUBLIC_WS_BASE_URL=wss://api.example.com/ws/stream`
 - `SIGNAL_FLOW_CORS_ORIGINS=https://web.example.com,capacitor://localhost`
+- `SIGNAL_FLOW_ANDROID_PACKAGE_NAME=com.signalflow.live`
+- `SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS=AA:BB:CC,...`
 - `SIGNAL_FLOW_ENABLE_DEMO_SEED=false`
 - `SIGNAL_FLOW_STRICT_STARTUP_VALIDATION=true`
 
@@ -146,6 +149,8 @@ pytest -q
 ## Release Path
 
 - PWA release guide: [`docs/PWA_RELEASE_GUIDE.md`](docs/PWA_RELEASE_GUIDE.md)
+- HTTPS deployment guide: [`docs/HTTPS_DEPLOYMENT_GUIDE.md`](docs/HTTPS_DEPLOYMENT_GUIDE.md)
+- Production compose stack: [`docker-compose.production.yml`](docker-compose.production.yml)
 
 ## Database Migration Foundation
 

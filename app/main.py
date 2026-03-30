@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import auth, client_api, db
@@ -16,9 +16,14 @@ from .config import (
     APP_ENV,
     APP_NAME,
     APP_VERSION,
+    ANDROID_PACKAGE_NAME,
+    ANDROID_SHA256_CERT_FINGERPRINTS,
     BASE_DIR,
     CORS_ORIGINS,
     enforce_runtime_requirements,
+    PUBLIC_API_BASE_URL,
+    PUBLIC_WEB_BASE_URL,
+    PUBLIC_WS_BASE_URL,
     runtime_config_issues,
 )
 from .runtime import MarketRuntime
@@ -101,6 +106,24 @@ def app_icon() -> FileResponse:
     return FileResponse(Path(STATIC_DIR / 'icon.svg'), media_type='image/svg+xml')
 
 
+@app.get('/.well-known/assetlinks.json')
+def asset_links() -> JSONResponse:
+    if not ANDROID_PACKAGE_NAME or not ANDROID_SHA256_CERT_FINGERPRINTS:
+        return JSONResponse([])
+    return JSONResponse(
+        [
+            {
+                'relation': ['delegate_permission/common.handle_all_urls'],
+                'target': {
+                    'namespace': 'android_app',
+                    'package_name': ANDROID_PACKAGE_NAME,
+                    'sha256_cert_fingerprints': ANDROID_SHA256_CERT_FINGERPRINTS,
+                },
+            }
+        ]
+    )
+
+
 @app.get('/api/health')
 def health() -> dict[str, object]:
     status_payload = runtime.status()
@@ -144,6 +167,41 @@ def readiness() -> dict[str, object]:
 @app.get('/api/source-status')
 def source_status() -> dict[str, object]:
     return runtime.status()
+
+
+@app.get('/api/release-status')
+def release_status() -> dict[str, object]:
+    issues = runtime_config_issues()
+    assetlinks_ready = bool(ANDROID_PACKAGE_NAME and ANDROID_SHA256_CERT_FINGERPRINTS)
+    return {
+        'environment': APP_ENV,
+        'public_urls': {
+            'web': PUBLIC_WEB_BASE_URL,
+            'api': PUBLIC_API_BASE_URL,
+            'websocket': PUBLIC_WS_BASE_URL,
+        },
+        'pwa': {
+            'manifest_url': '/manifest.webmanifest',
+            'service_worker_url': '/sw.js',
+            'assetlinks_url': '/.well-known/assetlinks.json',
+            'https_ready': bool(
+                PUBLIC_WEB_BASE_URL.startswith('https://')
+                and PUBLIC_API_BASE_URL.startswith('https://')
+                and PUBLIC_WS_BASE_URL.startswith('wss://')
+            ),
+        },
+        'android': {
+            'package_name': ANDROID_PACKAGE_NAME,
+            'sha256_cert_fingerprints': ANDROID_SHA256_CERT_FINGERPRINTS,
+            'assetlinks_ready': assetlinks_ready,
+        },
+        'issues': issues,
+        'ready_for_hosted_pwa': not issues
+        and PUBLIC_WEB_BASE_URL.startswith('https://')
+        and PUBLIC_API_BASE_URL.startswith('https://')
+        and PUBLIC_WS_BASE_URL.startswith('wss://'),
+        'ready_for_android_packaging': not issues and assetlinks_ready,
+    }
 
 
 @app.get('/api/client/bootstrap', response_model=ClientBootstrapResponse)

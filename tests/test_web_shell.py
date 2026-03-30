@@ -36,9 +36,11 @@ def test_web_shell_routes_are_served(tmp_path, monkeypatch) -> None:
         manifest_response = client.get('/manifest.webmanifest')
         sw_response = client.get('/sw.js')
         icon_response = client.get('/icon.svg')
+        assetlinks_response = client.get('/.well-known/assetlinks.json')
 
         assert index_response.status_code == 200
         assert 'Install App' in index_response.text
+        assert 'Secure Context' in index_response.text
 
         assert manifest_response.status_code == 200
         assert 'Signal Flow Live' in manifest_response.text
@@ -48,3 +50,5 @@ def test_web_shell_routes_are_served(tmp_path, monkeypatch) -> None:
 
         assert icon_response.status_code == 200
         assert '<svg' in icon_response.text
+
+        assert assetlinks_response.status_code == 200
