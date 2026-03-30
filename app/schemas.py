@@ -6,6 +6,30 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class UserSignupRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=30, pattern=r'^[a-zA-Z0-9_\-]+$')
+    email: str = Field(..., min_length=5, max_length=100)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class UserLoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=30)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    created_at: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: Literal['bearer'] = 'bearer'
+    user: UserResponse
+
+
 class AssetResponse(BaseModel):
     symbol: str
     name: str
@@ -52,7 +76,7 @@ class StrategyResponse(BaseModel):
 
 class StrategyCreateRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)
-    rule_type: Literal['rsi_reversion', 'golden_cross', 'score_combo']
+    rule_type: Literal['rsi_reversion', 'score_combo']
     rsi_buy_threshold: float | None = Field(default=35, ge=1, le=99)
     rsi_sell_threshold: float | None = Field(default=68, ge=1, le=99)
     volume_multiplier: float | None = Field(default=1.2, ge=1.0, le=10.0)
@@ -64,8 +88,32 @@ class StrategyToggleRequest(BaseModel):
 
 
 class WatchlistCreateRequest(BaseModel):
-    user_name: str = Field(default='demo', min_length=1, max_length=20)
     symbol: str
+
+
+class NotificationSettingsResponse(BaseModel):
+    user_name: str
+    web_enabled: bool
+    email_enabled: bool
+    updated_at: str
+
+
+class NotificationSettingsUpdateRequest(BaseModel):
+    web_enabled: bool | None = None
+    email_enabled: bool | None = None
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    user_name: str
+    symbol: str
+    signal_type: str
+    strategy_name: str
+    reason: str
+    price: float
+    created_at: str
+    is_read: bool
+    read_at: str | None = None
 
 
 class OverviewResponse(BaseModel):

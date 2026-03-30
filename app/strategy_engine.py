@@ -29,6 +29,7 @@ class SignalDecision:
     reason: str
 
 
+
 def build_snapshot(symbol: str, candles: list[dict]) -> IndicatorSnapshot:
     closes = [float(candle['close_price']) for candle in candles]
     volumes = [float(candle['volume']) for candle in candles]
@@ -51,6 +52,7 @@ def build_snapshot(symbol: str, candles: list[dict]) -> IndicatorSnapshot:
     )
 
 
+
 def evaluate_strategies(snapshot: IndicatorSnapshot, strategies: list[dict]) -> list[SignalDecision]:
     decisions: list[SignalDecision] = []
     for strategy in strategies:
@@ -69,6 +71,7 @@ def evaluate_strategies(snapshot: IndicatorSnapshot, strategies: list[dict]) -> 
             if decision:
                 decisions.append(decision)
     return decisions
+
 
 
 def _evaluate_rsi_reversion(snapshot: IndicatorSnapshot, strategy: dict) -> list[SignalDecision]:
@@ -90,10 +93,7 @@ def _evaluate_rsi_reversion(snapshot: IndicatorSnapshot, strategy: dict) -> list
                 signal_type='BUY',
                 strategy_name=strategy['name'],
                 score=82,
-                reason=(
-                    f"RSI {snapshot.rsi14:.1f}, Bollinger lower touch, "
-                    f"volume x{volume_multiplier:.1f}"
-                ),
+                reason=f"RSI {snapshot.rsi14:.1f}, 볼린저 하단 접근, 거래량 {volume_multiplier:.1f}배 이상",
             )
         )
 
@@ -103,10 +103,11 @@ def _evaluate_rsi_reversion(snapshot: IndicatorSnapshot, strategy: dict) -> list
                 signal_type='SELL',
                 strategy_name=strategy['name'],
                 score=76,
-                reason=f"RSI {snapshot.rsi14:.1f}, Bollinger upper near",
+                reason=f"RSI {snapshot.rsi14:.1f}, 볼린저 상단 근접",
             )
         )
     return out
+
 
 
 def _evaluate_golden_cross(snapshot: IndicatorSnapshot, strategy: dict) -> SignalDecision | None:
@@ -117,9 +118,10 @@ def _evaluate_golden_cross(snapshot: IndicatorSnapshot, strategy: dict) -> Signa
             signal_type='BUY',
             strategy_name=strategy['name'],
             score=74,
-            reason=f"Golden cross (SMA5 {snapshot.sma5:.2f} > SMA20 {snapshot.sma20:.2f})",
+            reason=f"골든크로스 발생 (SMA5 {snapshot.sma5:.2f} > SMA20 {snapshot.sma20:.2f})",
         )
     return None
+
 
 
 def _evaluate_score_combo(snapshot: IndicatorSnapshot, strategy: dict) -> SignalDecision | None:
@@ -135,21 +137,21 @@ def _evaluate_score_combo(snapshot: IndicatorSnapshot, strategy: dict) -> Signal
         volume_multiplier = strategy.get('volume_multiplier') or 1.3
         if snapshot.volume >= snapshot.avg_volume_20 * volume_multiplier:
             score += 20
-            reasons.append('Volume surge')
+            reasons.append('거래량 급증')
 
     if snapshot.bollinger_lower is not None and snapshot.close_price <= snapshot.bollinger_lower * 1.01:
         score += 25
-        reasons.append('Bollinger lower touch')
+        reasons.append('볼린저 하단 접근')
 
     if None not in (snapshot.sma5, snapshot.sma20) and snapshot.sma5 > snapshot.sma20:
         score += 25
-        reasons.append('Short-term trend up')
+        reasons.append('단기 추세 우위')
 
     if score >= threshold:
         return SignalDecision(
             signal_type='BUY',
             strategy_name=strategy['name'],
             score=float(score),
-            reason=', '.join(reasons) or 'Composite score met',
+            reason=', '.join(reasons) or '복합 점수 충족',
         )
     return None
