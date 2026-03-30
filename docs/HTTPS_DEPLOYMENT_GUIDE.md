@@ -57,7 +57,7 @@ If you already have a package name or signing fingerprints:
 Start the production stack:
 
 ```powershell
-docker compose -f docker-compose.production.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
 ```
 
 This stack provides:
@@ -65,6 +65,7 @@ This stack provides:
 - FastAPI app container with startup migrations
 - Caddy reverse proxy with automatic HTTPS
 - forwarded proxy headers for correct scheme handling
+- SMTP auth email settings loaded from `.env.production`
 
 ## Verify
 
