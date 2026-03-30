@@ -11,17 +11,18 @@
     .panel { background:rgba(15,27,45,.9); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 16px 36px rgba(0,0,0,.24); }
     .hero,.grid,.detail { display:grid; gap:16px; } .hero { grid-template-columns:1.3fr .9fr; } .grid { grid-template-columns:1fr 1.25fr; } .detail { grid-template-columns:1.15fr .85fr; }
     h1,h2 { margin:0 0 8px; } p,.muted { color:var(--muted); } code { color:#c5d5ff; }
-    .stats,.cards,.summary,.forms { display:grid; gap:12px; } .stats,.cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .summary { grid-template-columns:repeat(5,minmax(0,1fr)); } .forms { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .stats,.cards,.summary,.forms,.diag { display:grid; gap:12px; } .stats,.cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .summary { grid-template-columns:repeat(5,minmax(0,1fr)); } .forms { grid-template-columns:repeat(2,minmax(0,1fr)); } .diag { grid-template-columns:repeat(3,minmax(0,1fr)); }
     .card,.summary-item { background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:14px; padding:14px; }
     .pill { display:inline-flex; padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.06); color:var(--muted); font-size:12px; }
+    .warning { margin-top:12px; padding:12px 14px; border-radius:14px; border:1px solid rgba(251,113,133,.35); background:rgba(251,113,133,.08); color:#fecdd3; display:none; }
     .buy { color:var(--buy); font-weight:700; } .sell { color:var(--sell); font-weight:700; } .positive { color:var(--buy); } .negative { color:var(--sell); }
     label { display:grid; gap:6px; color:var(--muted); font-size:13px; } input,select,button { width:100%; border-radius:12px; border:1px solid var(--line); background:#09111d; color:var(--text); padding:11px 12px; font:inherit; }
     button { cursor:pointer; background:linear-gradient(135deg,rgba(79,140,255,.18),rgba(45,212,191,.16)); } button.secondary { background:rgba(255,255,255,.04); }
     .actions { display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:10px; }
     .checks { display:flex; gap:14px; flex-wrap:wrap; margin:10px 0; } .checks label { display:inline-flex; align-items:center; gap:8px; } .checks input { width:auto; margin:0; accent-color:var(--accent); }
     .scroll { overflow:auto; border:1px solid var(--line); border-radius:14px; } table { width:100%; border-collapse:collapse; min-width:540px; } th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; vertical-align:top; } th { color:#b5c8de; font-size:12px; text-transform:uppercase; letter-spacing:.08em; background:rgba(255,255,255,.03); } tr:last-child td { border-bottom:0; } tr.asset-row { cursor:pointer; } tr.asset-row:hover, tr.asset-row.selected { background:rgba(79,140,255,.09); }
-    @media (max-width:1100px) { .hero,.grid,.detail,.stats,.cards,.summary,.forms,.actions { grid-template-columns:1fr 1fr; } .hero,.grid,.detail { grid-template-columns:1fr; } }
-    @media (max-width:720px) { main { width:min(100% - 16px,100%); } .stats,.cards,.summary,.forms,.actions { grid-template-columns:1fr; } }
+    @media (max-width:1100px) { .hero,.grid,.detail,.stats,.cards,.summary,.forms,.actions,.diag { grid-template-columns:1fr 1fr; } .hero,.grid,.detail { grid-template-columns:1fr; } }
+    @media (max-width:720px) { main { width:min(100% - 16px,100%); } .stats,.cards,.summary,.forms,.actions,.diag { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -31,6 +32,7 @@
         <div class="pill">Shared Web/App Contract</div>
         <h1>Signal Flow Live</h1>
         <p>Web and mobile clients now share one bootstrap API, one dashboard aggregate API, and one asset detail API.</p>
+        <div id="runtime-warning" class="warning"></div>
       </div>
       <div class="panel stats">
         <div class="card"><div class="muted">Socket</div><strong id="socket-status">Connecting</strong></div>
@@ -38,6 +40,20 @@
         <div class="card"><div class="muted">Watchlist</div><strong id="watch-count">0</strong></div>
         <div class="card"><div class="muted">Unread</div><strong id="unread-count">0</strong></div>
       </div>
+    </section>
+
+    <section class="panel">
+      <h2>Runtime Diagnostics</h2>
+      <p>Bootstrap metadata shared with both the web client and an app client.</p>
+      <div class="diag" style="margin-top:12px;">
+        <div class="card"><div class="muted">Environment</div><strong id="app-environment">Loading</strong></div>
+        <div class="card"><div class="muted">Requested Source</div><strong id="requested-source">Loading</strong></div>
+        <div class="card"><div class="muted">Active Source</div><strong id="active-source">Loading</strong></div>
+        <div class="card"><div class="muted">Last Message</div><strong id="last-message-at">-</strong></div>
+        <div class="card"><div class="muted">API Base</div><strong id="api-base-value">-</strong></div>
+        <div class="card"><div class="muted">WebSocket URL</div><strong id="ws-url-value">-</strong></div>
+      </div>
+      <p id="runtime-error" class="muted" style="margin-top:12px;">No runtime errors reported.</p>
     </section>
 
     <section class="grid">
@@ -111,7 +127,7 @@
   </main>
 
   <script>
-    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
+    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
     const el = id => document.getElementById(id);
     const fmtNum = value => value == null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
     const fmtPct = value => value == null ? '-' : `${value.toFixed(2)}%`;
@@ -130,7 +146,22 @@
 
     function renderAssetOptions() { el('watch-symbol').innerHTML = state.assets.map(asset => `<option value="${asset.symbol}">${asset.symbol} · ${asset.name}</option>`).join(''); }
     function renderSession(session) { el('auth-status').textContent = session.authenticated && session.user ? `Signed in as ${session.user.username} (${session.user.email})` : 'Signed out. Use demo or create a new account.'; }
-    function renderSource(source) { const value = `${source.active_source || source.requested_source || 'unknown'}${source.interval ? ` / ${source.interval}` : ''}${source.state ? ` / ${source.state}` : ''}`; el('source-status').textContent = value; }
+    function renderRuntimeMeta(app, source) {
+      const requested = source.requested_source || 'unknown';
+      const active = source.active_source || requested;
+      const value = `${active}${source.interval ? ` / ${source.interval}` : ''}${source.state ? ` / ${source.state}` : ''}`;
+      const fallback = requested !== active;
+      el('source-status').textContent = value;
+      el('app-environment').textContent = `${app.name} ${app.version} / ${app.environment}`;
+      el('requested-source').textContent = requested;
+      el('active-source').textContent = active;
+      el('last-message-at').textContent = fmtTime(source.last_message_at);
+      el('api-base-value').textContent = state.apiBase || '-';
+      el('ws-url-value').textContent = state.wsUrl || '-';
+      el('runtime-error').textContent = source.last_error ? `Last error: ${source.last_error}` : 'No runtime errors reported.';
+      el('runtime-warning').style.display = fallback ? 'block' : 'none';
+      el('runtime-warning').textContent = fallback ? `Fallback active. Requested ${requested} but serving ${active}.` : '';
+    }
 
     function renderWatchlist(rows) {
       el('watch-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${row.symbol}</td><td>${fmtNum(row.last_price)}</td><td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</td><td><button class="secondary watch-remove" data-symbol="${row.symbol}">Remove</button></td></tr>`).join('') : '<tr><td colspan="4" class="muted">No watchlist items.</td></tr>';
@@ -161,14 +192,15 @@
       const data = await requestJson(state.endpoints.bootstrap);
       state.apiBase = data.platforms.find(item => item.name === 'web')?.api_base_url || location.origin;
       state.wsUrl = data.platforms.find(item => item.name === 'web')?.websocket_url || `${location.origin.replace(/^http/, 'ws')}/ws/stream`;
+      state.appMeta = data.app || state.appMeta;
       state.endpoints = data.endpoints;
       state.assets = data.catalog.assets;
-      renderSession(data.session); renderSource(data.source); renderAssetOptions();
+      renderSession(data.session); renderRuntimeMeta(data.app, data.source); renderAssetOptions();
     }
 
     async function loadDashboard() {
       const data = await requestJson(state.endpoints.dashboard);
-      renderSession(data.session); renderSource(data.source); renderOverview(data.overview); renderSignals(data.signals); renderWatchlist(data.watchlist); renderNotifications(data.notifications);
+      renderSession(data.session); renderRuntimeMeta(state.appMeta, data.source); renderOverview(data.overview); renderSignals(data.signals); renderWatchlist(data.watchlist); renderNotifications(data.notifications);
       el('web-enabled').checked = data.notification_settings?.web_enabled ?? true;
       el('email-enabled').checked = data.notification_settings?.email_enabled ?? false;
       el('asset-count').textContent = data.counts.assets; el('signal-count').textContent = data.counts.recent_signals; el('notification-count').textContent = data.counts.notifications; el('watch-count').textContent = data.counts.watchlist; el('unread-count').textContent = data.counts.unread_notifications;
