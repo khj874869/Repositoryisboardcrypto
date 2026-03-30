@@ -138,7 +138,7 @@
   </main>
 
   <script>
-    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, installPrompt: null, release: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
+    const state = { token: localStorage.getItem('signal-flow-token'), refreshToken: localStorage.getItem('signal-flow-refresh-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, installPrompt: null, release: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', refresh: '/api/auth/refresh', logout: '/api/auth/logout', sessions: '/api/auth/sessions', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
     const el = id => document.getElementById(id);
     const fmtNum = value => value == null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
     const fmtPct = value => value == null ? '-' : `${value.toFixed(2)}%`;
@@ -148,11 +148,30 @@
     const assetUrl = symbol => httpUrl((state.endpoints.asset_detail || '/api/client/assets/{symbol}').replace('{symbol}', encodeURIComponent(symbol)));
     const msg = (text, bad = false) => { el('auth-message').textContent = text || ''; el('auth-message').style.color = bad ? 'var(--sell)' : 'var(--muted)'; };
 
-    async function requestJson(path, options = {}) {
+    async function requestJson(path, options = {}, retry = true) {
       const response = await fetch(httpUrl(path), { ...options, headers: { ...(options.headers || {}), ...authHeaders() } });
       const payload = (response.headers.get('content-type') || '').includes('application/json') ? await response.json() : null;
+      const authPaths = [state.endpoints.login, state.endpoints.signup, state.endpoints.refresh, state.endpoints.logout];
+      if (response.status === 401 && retry && state.refreshToken && !authPaths.includes(path)) {
+        const refreshed = await refreshSession();
+        if (refreshed) return requestJson(path, options, false);
+      }
       if (!response.ok) throw new Error(payload?.detail || `Request failed: ${response.status}`);
       return payload;
+    }
+
+    function storeTokens(payload) {
+      state.token = payload.access_token;
+      state.refreshToken = payload.refresh_token;
+      localStorage.setItem('signal-flow-token', payload.access_token);
+      localStorage.setItem('signal-flow-refresh-token', payload.refresh_token);
+    }
+
+    function clearTokens() {
+      state.token = null;
+      state.refreshToken = null;
+      localStorage.removeItem('signal-flow-token');
+      localStorage.removeItem('signal-flow-refresh-token');
     }
 
     function renderAssetOptions() { el('watch-symbol').innerHTML = state.assets.map(asset => `<option value="${asset.symbol}">${asset.symbol} · ${asset.name}</option>`).join(''); }
@@ -267,12 +286,27 @@
     }
 
     async function login() {
-      try { const data = await requestJson(state.endpoints.login, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('login-username').value, password: el('login-password').value }) }); state.token = data.access_token; localStorage.setItem('signal-flow-token', state.token); msg(`Signed in as ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
+      try { const data = await requestJson(state.endpoints.login, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('login-username').value, password: el('login-password').value, client_name: 'web-dashboard' }) }); storeTokens(data); msg(`Signed in as ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
     }
     async function signup() {
-      try { const data = await requestJson(state.endpoints.signup, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('signup-username').value, email: el('signup-email').value, password: el('signup-password').value }) }); state.token = data.access_token; localStorage.setItem('signal-flow-token', state.token); msg(`Created ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
+      try { const data = await requestJson(state.endpoints.signup, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('signup-username').value, email: el('signup-email').value, password: el('signup-password').value, client_name: 'web-dashboard' }) }); storeTokens(data); msg(`Created ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
     }
-    async function logout() { state.token = null; localStorage.removeItem('signal-flow-token'); msg('Signed out.'); await refreshAll(); }
+    async function refreshSession() {
+      if (!state.refreshToken) return false;
+      try {
+        const data = await fetch(httpUrl(state.endpoints.refresh), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: state.refreshToken, client_name: 'web-dashboard' }) });
+        const payload = (data.headers.get('content-type') || '').includes('application/json') ? await data.json() : null;
+        if (!data.ok) {
+          clearTokens();
+          return false;
+        }
+        storeTokens(payload);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+    async function logout() { try { if (state.refreshToken) { await fetch(httpUrl(state.endpoints.logout), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: state.refreshToken }) }); } } finally { clearTokens(); msg('Signed out.'); await refreshAll(); } }
     async function addWatch() { try { await requestJson(state.endpoints.watchlist, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: el('watch-symbol').value }) }); await loadDashboard(); msg(`Added ${el('watch-symbol').value}.`); } catch (error) { msg(error.message, true); } }
     async function saveSettings() { try { await requestJson(state.endpoints.notification_settings, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web_enabled: el('web-enabled').checked, email_enabled: el('email-enabled').checked }) }); await loadDashboard(); msg('Settings saved.'); } catch (error) { msg(error.message, true); } }
     async function removeWatch(symbol) { try { await requestJson(`${state.endpoints.watchlist}/${encodeURIComponent(symbol)}`, { method: 'DELETE' }); await loadDashboard(); msg(`Removed ${symbol}.`); } catch (error) { msg(error.message, true); } }

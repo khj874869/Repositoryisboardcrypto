@@ -73,6 +73,9 @@ def test_client_bootstrap_exposes_shared_contract(tmp_path, monkeypatch) -> None
         assert payload['features']['web'] is True
         assert payload['features']['app'] is True
         assert payload['endpoints']['dashboard'] == '/api/client/dashboard'
+        assert payload['endpoints']['refresh'] == '/api/auth/refresh'
+        assert payload['endpoints']['request_password_reset'] == '/api/auth/password-reset/request'
+        assert payload['endpoints']['verify_email'] == '/api/auth/email-verification/confirm'
         assert payload['catalog']['assets']
         assert payload['catalog']['supported_intervals'][0] == '10m'
 

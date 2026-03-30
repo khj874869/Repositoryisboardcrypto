@@ -21,7 +21,7 @@ These endpoints give web and app clients the same startup metadata, dashboard pa
 - Upbit REST bootstrap for recent candles
 - Upbit WebSocket ticker and candle streaming
 - automatic fallback to simulator mode if Upbit startup fails
-- JWT-style bearer auth for signup, login, and `me`
+- access plus refresh token auth with session rotation, password reset, and email verification foundations
 - per-user watchlist and notification settings
 - notification inbox with read state
 - shared dashboard and asset detail APIs for web and app clients
@@ -108,7 +108,15 @@ Returns:
 - `GET /api/source-status`
 - `POST /api/auth/signup`
 - `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
+- `POST /api/auth/email-verification/request`
+- `POST /api/auth/email-verification/confirm`
+- `POST /api/auth/password-reset/request`
+- `POST /api/auth/password-reset/confirm`
 - `GET /api/auth/me`
+- `GET /api/auth/sessions`
+- `DELETE /api/auth/sessions/{session_id}`
 - `GET /api/assets`
 - `GET /api/assets/{symbol}/candles`
 - `GET /api/assets/{symbol}/signals`
@@ -131,6 +139,10 @@ Returns:
 - `SIGNAL_FLOW_UPBIT_INTERVAL=1s|1m|3m|5m|10m|15m|30m|60m|240m`
 - `SIGNAL_FLOW_UPBIT_BOOTSTRAP_COUNT=120`
 - `SIGNAL_FLOW_SOURCE_FALLBACK_TO_SIMULATOR=true`
+- `SIGNAL_FLOW_REFRESH_TOKEN_EXPIRE_DAYS=30`
+- `SIGNAL_FLOW_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30`
+- `SIGNAL_FLOW_EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS=24`
+- `SIGNAL_FLOW_AUTH_TOKEN_PREVIEW_ENABLED=true`
 - `SIGNAL_FLOW_PUBLIC_WEB_BASE_URL=https://signals.example.com`
 - `SIGNAL_FLOW_PUBLIC_API_BASE_URL=https://api.example.com`
 - `SIGNAL_FLOW_PUBLIC_WS_BASE_URL=wss://api.example.com/ws/stream`
@@ -152,6 +164,7 @@ pytest -q
 - HTTPS deployment guide: [`docs/HTTPS_DEPLOYMENT_GUIDE.md`](docs/HTTPS_DEPLOYMENT_GUIDE.md)
 - Production compose stack: [`docker-compose.production.yml`](docker-compose.production.yml)
 - Production env generator: [`scripts/generate-production-env.ps1`](scripts/generate-production-env.ps1)
+- GitHub Actions CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
 ## Database Migration Foundation
 

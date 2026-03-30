@@ -92,7 +92,36 @@ users = Table(
     Column('username', String(64), nullable=False, unique=True),
     Column('email', String(255), nullable=False, unique=True),
     Column('password_hash', String(255), nullable=False),
+    Column('email_verified_at', String(64)),
     Column('created_at', String(64), nullable=False),
+)
+
+refresh_sessions = Table(
+    'refresh_sessions',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('user_name', String(64), nullable=False),
+    Column('token_hash', String(128), nullable=False, unique=True),
+    Column('client_name', String(128)),
+    Column('user_agent', String(255)),
+    Column('ip_address', String(64)),
+    Column('created_at', String(64), nullable=False),
+    Column('last_used_at', String(64)),
+    Column('expires_at', String(64), nullable=False),
+    Column('revoked_at', String(64)),
+)
+
+auth_action_tokens = Table(
+    'auth_action_tokens',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('user_name', String(64), nullable=False),
+    Column('token_hash', String(128), nullable=False, unique=True),
+    Column('token_type', String(32), nullable=False),
+    Column('email', String(255)),
+    Column('created_at', String(64), nullable=False),
+    Column('expires_at', String(64), nullable=False),
+    Column('consumed_at', String(64)),
 )
 
 watchlists = Table(
@@ -316,6 +345,7 @@ def seed_demo_user(conn: Connection) -> None:
             username=DEMO_USER,
             email=DEMO_EMAIL,
             password_hash=hash_password(DEMO_PASSWORD),
+            email_verified_at=isoformat(utc_now()),
             created_at=isoformat(utc_now()),
         )
     )
@@ -358,29 +388,216 @@ def execute(query: str, params: tuple[Any, ...] | dict[str, Any] = ()) -> None:
         conn.execute(statement, bindings)
 
 
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
 def get_user_by_username(username: str) -> dict[str, Any] | None:
     with get_conn() as conn:
         row = conn.execute(select(users).where(users.c.username == username)).mappings().first()
         return dict(row) if row else None
 
 
+def get_user_by_email(email: str) -> dict[str, Any] | None:
+    normalized_email = normalize_email(email)
+    with get_conn() as conn:
+        row = conn.execute(select(users).where(users.c.email == normalized_email)).mappings().first()
+        return dict(row) if row else None
+
+
+def get_user_by_login(login: str) -> dict[str, Any] | None:
+    identifier = login.strip()
+    if '@' in identifier:
+        return get_user_by_email(identifier)
+    return get_user_by_username(identifier)
+
+
 def create_user(*, username: str, email: str, password_hash: str) -> dict[str, Any]:
     now = isoformat(utc_now())
+    normalized_email = normalize_email(email)
     with get_conn() as conn:
         conn.execute(
             insert(users).values(
                 username=username,
-                email=email,
+                email=normalized_email,
                 password_hash=password_hash,
+                email_verified_at=None,
                 created_at=now,
             )
         )
         ensure_notification_settings(conn, username)
         row = conn.execute(
-            select(users.c.id, users.c.username, users.c.email, users.c.created_at).where(users.c.username == username)
+            select(users.c.id, users.c.username, users.c.email, users.c.email_verified_at, users.c.created_at).where(users.c.username == username)
         ).mappings().first()
     assert row is not None
     return dict(row)
+
+
+def create_refresh_session(
+    *,
+    user_name: str,
+    token_hash: str,
+    expires_at: str,
+    client_name: str | None = None,
+    user_agent: str | None = None,
+    ip_address: str | None = None,
+) -> dict[str, Any]:
+    now = isoformat(utc_now())
+    with get_conn() as conn:
+        result = conn.execute(
+            insert(refresh_sessions).values(
+                user_name=user_name,
+                token_hash=token_hash,
+                client_name=client_name,
+                user_agent=user_agent,
+                ip_address=ip_address,
+                created_at=now,
+                last_used_at=now,
+                expires_at=expires_at,
+                revoked_at=None,
+            )
+        )
+        session_id = result.inserted_primary_key[0]
+        row = conn.execute(select(refresh_sessions).where(refresh_sessions.c.id == session_id)).mappings().first()
+    assert row is not None
+    return dict(row)
+
+
+def get_refresh_session_by_token_hash(token_hash: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute(select(refresh_sessions).where(refresh_sessions.c.token_hash == token_hash)).mappings().first()
+        return dict(row) if row else None
+
+
+def get_refresh_session_by_id(session_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute(select(refresh_sessions).where(refresh_sessions.c.id == session_id)).mappings().first()
+        return dict(row) if row else None
+
+
+def touch_refresh_session(session_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            refresh_sessions.update()
+            .where(refresh_sessions.c.id == session_id)
+            .values(last_used_at=isoformat(utc_now()))
+        )
+
+
+def revoke_refresh_session(session_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            refresh_sessions.update()
+            .where(refresh_sessions.c.id == session_id, refresh_sessions.c.revoked_at.is_(None))
+            .values(revoked_at=isoformat(utc_now()))
+        )
+
+
+def revoke_refresh_session_for_user(session_id: int, user_name: str) -> bool:
+    with get_conn() as conn:
+        result = conn.execute(
+            refresh_sessions.update()
+            .where(
+                refresh_sessions.c.id == session_id,
+                refresh_sessions.c.user_name == user_name,
+                refresh_sessions.c.revoked_at.is_(None),
+            )
+            .values(revoked_at=isoformat(utc_now()))
+        )
+    return result.rowcount > 0
+
+
+def list_refresh_sessions(user_name: str) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            select(refresh_sessions)
+            .where(refresh_sessions.c.user_name == user_name)
+            .order_by(refresh_sessions.c.created_at.desc(), refresh_sessions.c.id.desc())
+        ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def create_auth_action_token(
+    *,
+    user_name: str,
+    token_hash: str,
+    token_type: str,
+    email: str | None,
+    expires_at: str,
+) -> dict[str, Any]:
+    now = isoformat(utc_now())
+    with get_conn() as conn:
+        result = conn.execute(
+            insert(auth_action_tokens).values(
+                user_name=user_name,
+                token_hash=token_hash,
+                token_type=token_type,
+                email=email,
+                created_at=now,
+                expires_at=expires_at,
+                consumed_at=None,
+            )
+        )
+        token_id = result.inserted_primary_key[0]
+        row = conn.execute(select(auth_action_tokens).where(auth_action_tokens.c.id == token_id)).mappings().first()
+    assert row is not None
+    return dict(row)
+
+
+def revoke_auth_action_tokens(user_name: str, token_type: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            auth_action_tokens.update()
+            .where(
+                auth_action_tokens.c.user_name == user_name,
+                auth_action_tokens.c.token_type == token_type,
+                auth_action_tokens.c.consumed_at.is_(None),
+            )
+            .values(consumed_at=isoformat(utc_now()))
+        )
+
+
+def get_auth_action_token(token_hash: str, token_type: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            select(auth_action_tokens).where(
+                auth_action_tokens.c.token_hash == token_hash,
+                auth_action_tokens.c.token_type == token_type,
+            )
+        ).mappings().first()
+    return dict(row) if row else None
+
+
+def consume_auth_action_token(token_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            auth_action_tokens.update()
+            .where(auth_action_tokens.c.id == token_id, auth_action_tokens.c.consumed_at.is_(None))
+            .values(consumed_at=isoformat(utc_now()))
+        )
+
+
+def mark_user_email_verified(user_name: str) -> dict[str, Any] | None:
+    verified_at = isoformat(utc_now())
+    with get_conn() as conn:
+        conn.execute(
+            users.update()
+            .where(users.c.username == user_name)
+            .values(email_verified_at=verified_at)
+        )
+        row = conn.execute(select(users).where(users.c.username == user_name)).mappings().first()
+    return dict(row) if row else None
+
+
+def update_user_password(user_name: str, password_hash: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        conn.execute(
+            users.update()
+            .where(users.c.username == user_name)
+            .values(password_hash=password_hash)
+        )
+        row = conn.execute(select(users).where(users.c.username == user_name)).mappings().first()
+    return dict(row) if row else None
 
 
 def ensure_notification_settings(conn: Connection | None, user_name: str) -> None:

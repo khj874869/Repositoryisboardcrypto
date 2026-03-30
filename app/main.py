@@ -28,14 +28,21 @@ from .config import (
 )
 from .runtime import MarketRuntime
 from .schemas import (
+    AuthActionResponse,
     ClientAssetDetailResponse,
     ClientBootstrapResponse,
     ClientDashboardResponse,
+    EmailRequest,
     NotificationSettingsUpdateRequest,
+    PasswordResetConfirmRequest,
+    RefreshSessionResponse,
+    RefreshTokenRequest,
     StrategyCreateRequest,
     StrategyToggleRequest,
+    TokenResponse,
     UserLoginRequest,
     UserSignupRequest,
+    VerifyEmailRequest,
     WatchlistCreateRequest,
 )
 
@@ -246,41 +253,101 @@ def client_asset_detail(
     return detail
 
 
-@app.post('/api/auth/signup', status_code=status.HTTP_201_CREATED)
-def signup(payload: UserSignupRequest):
+@app.post('/api/auth/signup', response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup(request: Request, payload: UserSignupRequest):
     if db.get_user_by_username(payload.username):
         raise HTTPException(status_code=409, detail='Username already exists')
-    existing_email = db.fetch_one('SELECT id FROM users WHERE email = ?', (payload.email,))
+    normalized_email = db.normalize_email(payload.email)
+    existing_email = db.fetch_one('SELECT id FROM users WHERE email = ?', (normalized_email,))
     if existing_email:
         raise HTTPException(status_code=409, detail='Email already exists')
 
     user = db.create_user(
         username=payload.username,
-        email=payload.email,
+        email=normalized_email,
         password_hash=auth.hash_password(payload.password),
     )
-    token = auth.create_access_token(payload.username)
-    return {'access_token': token, 'token_type': 'bearer', 'user': user}
+    return auth.build_auth_response(user, request, client_name=payload.client_name)
 
 
-@app.post('/api/auth/login')
-def login(payload: UserLoginRequest):
-    user = db.get_user_by_username(payload.username)
+@app.post('/api/auth/login', response_model=TokenResponse)
+def login(request: Request, payload: UserLoginRequest):
+    user = db.get_user_by_login(payload.username)
     if not user or not auth.verify_password(payload.password, user['password_hash']):
         raise HTTPException(status_code=401, detail='Invalid credentials')
-    public_user = {
-        'id': user['id'],
-        'username': user['username'],
-        'email': user['email'],
-        'created_at': user['created_at'],
-    }
-    token = auth.create_access_token(payload.username)
-    return {'access_token': token, 'token_type': 'bearer', 'user': public_user}
+    return auth.build_auth_response(user, request, client_name=payload.client_name)
+
+
+@app.post('/api/auth/refresh', response_model=TokenResponse)
+def refresh_auth(request: Request, payload: RefreshTokenRequest):
+    return auth.refresh_auth_response(payload.refresh_token, request, client_name=payload.client_name)
+
+
+@app.post('/api/auth/logout')
+def logout(payload: RefreshTokenRequest):
+    auth.revoke_refresh_token(payload.refresh_token)
+    return {'status': 'ok'}
+
+
+@app.post('/api/auth/email-verification/request', response_model=AuthActionResponse)
+def request_email_verification(current_user: dict = Depends(auth.get_current_user)):
+    user = db.get_user_by_username(current_user['username'])
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    return auth.create_email_verification(user)
+
+
+@app.post('/api/auth/email-verification/confirm')
+def confirm_email_verification(payload: VerifyEmailRequest):
+    return auth.verify_email_token(payload.token)
+
+
+@app.post('/api/auth/password-reset/request', response_model=AuthActionResponse)
+def request_password_reset(payload: EmailRequest):
+    return auth.create_password_reset(db.normalize_email(payload.email))
+
+
+@app.post('/api/auth/password-reset/confirm')
+def confirm_password_reset(payload: PasswordResetConfirmRequest):
+    return auth.reset_password_with_token(payload.token, payload.new_password)
 
 
 @app.get('/api/auth/me')
 def me(current_user: dict = Depends(auth.get_current_user)):
     return current_user
+
+
+@app.get('/api/auth/sessions', response_model=list[RefreshSessionResponse])
+def list_auth_sessions(context: dict = Depends(auth.get_current_auth_context)):
+    current_session_id = context['token'].get('sid')
+    sessions = db.list_refresh_sessions(context['user']['username'])
+    payload: list[dict[str, object]] = []
+    for session in sessions:
+        is_active = not bool(session.get('revoked_at')) and auth.time_from_iso(session['expires_at']) > db.utc_now()
+        payload.append(
+            {
+                'id': session['id'],
+                'user_name': session['user_name'],
+                'client_name': session.get('client_name'),
+                'user_agent': session.get('user_agent'),
+                'ip_address': session.get('ip_address'),
+                'created_at': session['created_at'],
+                'last_used_at': session.get('last_used_at'),
+                'expires_at': session['expires_at'],
+                'revoked_at': session.get('revoked_at'),
+                'is_active': is_active,
+                'is_current': session['id'] == current_session_id,
+            }
+        )
+    return payload
+
+
+@app.delete('/api/auth/sessions/{session_id}')
+def revoke_auth_session(session_id: int, current_user: dict = Depends(auth.get_current_user)):
+    revoked = db.revoke_refresh_session_for_user(session_id, current_user['username'])
+    if not revoked:
+        raise HTTPException(status_code=404, detail='Session not found')
+    return {'status': 'ok'}
 
 
 @app.get('/api/assets')

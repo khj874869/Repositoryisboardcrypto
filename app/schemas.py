@@ -10,24 +10,74 @@ class UserSignupRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=30, pattern=r'^[a-zA-Z0-9_\-]+$')
     email: str = Field(..., min_length=5, max_length=100)
     password: str = Field(..., min_length=8, max_length=128)
+    client_name: str | None = Field(default=None, max_length=120)
 
 
 class UserLoginRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=30)
+    username: str = Field(..., min_length=3, max_length=100)
     password: str = Field(..., min_length=8, max_length=128)
+    client_name: str | None = Field(default=None, max_length=120)
 
 
 class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    email_verified: bool = False
+    email_verified_at: str | None = None
     created_at: str
 
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: Literal['bearer'] = 'bearer'
+    expires_in: int
+    refresh_expires_at: str
     user: UserResponse
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=20, max_length=255)
+    client_name: str | None = Field(default=None, max_length=120)
+
+
+class EmailRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=100)
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., min_length=20, max_length=255)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(..., min_length=20, max_length=255)
+
+
+class ActionTokenPreviewResponse(BaseModel):
+    token: str
+
+
+class AuthActionResponse(BaseModel):
+    status: str
+    delivery: str | None = None
+    expires_at: str | None = None
+    preview: ActionTokenPreviewResponse | None = None
+
+
+class RefreshSessionResponse(BaseModel):
+    id: int
+    user_name: str
+    client_name: str | None = None
+    user_agent: str | None = None
+    ip_address: str | None = None
+    created_at: str
+    last_used_at: str | None = None
+    expires_at: str
+    revoked_at: str | None = None
+    is_active: bool
+    is_current: bool = False
 
 
 class AssetResponse(BaseModel):
@@ -154,6 +204,13 @@ class ClientEndpointsResponse(BaseModel):
     asset_detail: str
     login: str
     signup: str
+    refresh: str
+    logout: str
+    sessions: str
+    request_password_reset: str
+    reset_password: str
+    request_email_verification: str
+    verify_email: str
     me: str
     overview: str
     signals_recent: str
