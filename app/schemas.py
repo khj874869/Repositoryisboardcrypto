@@ -135,3 +135,96 @@ class BroadcastMessage(BaseModel):
     type: Literal['market_snapshot', 'signal']
     payload: dict
     timestamp: datetime
+
+
+class ClientSessionResponse(BaseModel):
+    authenticated: bool
+    user: UserResponse | None = None
+
+
+class ClientPlatformResponse(BaseModel):
+    name: str
+    api_base_url: str
+    websocket_url: str
+
+
+class ClientEndpointsResponse(BaseModel):
+    bootstrap: str
+    dashboard: str
+    asset_detail: str
+    login: str
+    signup: str
+    me: str
+    overview: str
+    signals_recent: str
+    watchlist: str
+    notifications: str
+    notification_settings: str
+    websocket: str
+
+
+class ClientFeaturesResponse(BaseModel):
+    auth: bool
+    watchlist: bool
+    notifications: bool
+    strategies: bool
+    realtime_stream: bool
+    web: bool
+    app: bool
+
+
+class MarketCatalogItemResponse(BaseModel):
+    symbol: str
+    name: str
+    market_type: str
+
+
+class ClientCatalogResponse(BaseModel):
+    assets: list[MarketCatalogItemResponse]
+    supported_intervals: list[str]
+
+
+class ClientBootstrapResponse(BaseModel):
+    app: dict[str, str]
+    session: ClientSessionResponse
+    source: dict[str, object]
+    platforms: list[ClientPlatformResponse]
+    endpoints: ClientEndpointsResponse
+    features: ClientFeaturesResponse
+    catalog: ClientCatalogResponse
+
+
+class DashboardCountsResponse(BaseModel):
+    assets: int
+    watchlist: int
+    recent_signals: int
+    notifications: int
+    unread_notifications: int
+
+
+class ClientDashboardResponse(BaseModel):
+    session: ClientSessionResponse
+    source: dict[str, object]
+    overview: list[OverviewResponse]
+    signals: list[SignalResponse]
+    watchlist: list[dict]
+    notifications: list[NotificationResponse]
+    notification_settings: NotificationSettingsResponse | None = None
+    counts: DashboardCountsResponse
+
+
+class SnapshotSummaryResponse(BaseModel):
+    rsi14: float | None = None
+    sma5: float | None = None
+    sma20: float | None = None
+    bollinger_upper: float | None = None
+    bollinger_lower: float | None = None
+    close_price: float | None = None
+
+
+class ClientAssetDetailResponse(BaseModel):
+    asset: AssetResponse
+    interval_type: str | None = None
+    candles: list[CandleResponse]
+    signals: list[SignalResponse]
+    snapshot: SnapshotSummaryResponse | None = None

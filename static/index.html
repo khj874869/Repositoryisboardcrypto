@@ -1,448 +1,214 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Signal Flow Live</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; background: #111827; color: #f9fafb; }
-    h1, h2 { margin-bottom: 8px; }
-    .grid { display: grid; grid-template-columns: 1.3fr 0.9fr; gap: 20px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 20px; }
-    .card { background: #1f2937; border-radius: 14px; padding: 18px; box-shadow: 0 6px 16px rgba(0,0,0,0.18); }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; font-size: 14px; vertical-align: top; }
-    .buy { color: #22c55e; font-weight: bold; }
-    .sell { color: #ef4444; font-weight: bold; }
-    .muted { color: #9ca3af; font-size: 13px; }
-    .pill { display: inline-block; border-radius: 999px; padding: 4px 10px; background: #374151; font-size: 12px; }
-    .positive { color: #22c55e; }
-    .negative { color: #ef4444; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .stat { background: #374151; border-radius: 12px; padding: 8px 12px; }
-    input, select, button { border-radius: 10px; border: 1px solid #4b5563; background: #111827; color: #f9fafb; padding: 10px 12px; }
-    button { cursor: pointer; }
-    form.inline { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    .stack { display: flex; flex-direction: column; gap: 12px; }
-    .notif-unread { font-weight: bold; }
-    .top-space { margin-top: 20px; }
-    @media (max-width: 1100px) { .grid, .grid-3 { grid-template-columns: 1fr; } }
+    :root { --bg:#08111d; --panel:#0f1b2d; --line:#22344d; --text:#e8eef7; --muted:#9cafc7; --buy:#2dd4bf; --sell:#fb7185; --accent:#4f8cff; }
+    * { box-sizing:border-box; } body { margin:0; font-family:"Segoe UI",sans-serif; background:linear-gradient(180deg,#07111c,#0a1422); color:var(--text); }
+    main { width:min(1360px,calc(100% - 24px)); margin:16px auto 28px; display:grid; gap:16px; }
+    .panel { background:rgba(15,27,45,.9); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 16px 36px rgba(0,0,0,.24); }
+    .hero,.grid,.detail { display:grid; gap:16px; } .hero { grid-template-columns:1.3fr .9fr; } .grid { grid-template-columns:1fr 1.25fr; } .detail { grid-template-columns:1.15fr .85fr; }
+    h1,h2 { margin:0 0 8px; } p,.muted { color:var(--muted); } code { color:#c5d5ff; }
+    .stats,.cards,.summary,.forms { display:grid; gap:12px; } .stats,.cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .summary { grid-template-columns:repeat(5,minmax(0,1fr)); } .forms { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .card,.summary-item { background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:14px; padding:14px; }
+    .pill { display:inline-flex; padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.06); color:var(--muted); font-size:12px; }
+    .buy { color:var(--buy); font-weight:700; } .sell { color:var(--sell); font-weight:700; } .positive { color:var(--buy); } .negative { color:var(--sell); }
+    label { display:grid; gap:6px; color:var(--muted); font-size:13px; } input,select,button { width:100%; border-radius:12px; border:1px solid var(--line); background:#09111d; color:var(--text); padding:11px 12px; font:inherit; }
+    button { cursor:pointer; background:linear-gradient(135deg,rgba(79,140,255,.18),rgba(45,212,191,.16)); } button.secondary { background:rgba(255,255,255,.04); }
+    .actions { display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:10px; }
+    .checks { display:flex; gap:14px; flex-wrap:wrap; margin:10px 0; } .checks label { display:inline-flex; align-items:center; gap:8px; } .checks input { width:auto; margin:0; accent-color:var(--accent); }
+    .scroll { overflow:auto; border:1px solid var(--line); border-radius:14px; } table { width:100%; border-collapse:collapse; min-width:540px; } th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; vertical-align:top; } th { color:#b5c8de; font-size:12px; text-transform:uppercase; letter-spacing:.08em; background:rgba(255,255,255,.03); } tr:last-child td { border-bottom:0; } tr.asset-row { cursor:pointer; } tr.asset-row:hover, tr.asset-row.selected { background:rgba(79,140,255,.09); }
+    @media (max-width:1100px) { .hero,.grid,.detail,.stats,.cards,.summary,.forms,.actions { grid-template-columns:1fr 1fr; } .hero,.grid,.detail { grid-template-columns:1fr; } }
+    @media (max-width:720px) { main { width:min(100% - 16px,100%); } .stats,.cards,.summary,.forms,.actions { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
-  <h1>Signal Flow Live</h1>
-  <div class="muted">Upbit 실데이터 연동을 기본으로 사용하고, 네트워크 실패 시 시뮬레이터로 자동 전환할 수 있는 실시간 시그널 분석 데모입니다.</div>
-
-  <div class="row" style="margin: 12px 0 20px;">
-    <div class="stat">WebSocket: <span id="socket-status">연결 중...</span></div>
-    <div class="stat">데이터 소스: <span id="source-status">확인 중...</span></div>
-    <div class="stat">관심 종목: <span id="watch-count">0</span></div>
-    <div class="stat">최근 시그널: <span id="signal-count">0</span></div>
-    <div class="stat">읽지 않은 알림: <span id="unread-count">0</span></div>
-  </div>
-
-  <div class="grid">
-    <section class="card stack">
-      <div>
-        <h2>인증</h2>
-        <div class="muted">데모 계정: <code>demo / demo1234</code></div>
-        <div id="auth-status" class="top-space">로그인 안 됨</div>
-        <form id="login-form" class="inline">
-          <input id="login-username" value="demo" placeholder="username" />
-          <input id="login-password" value="demo1234" type="password" placeholder="password" />
-          <button type="submit">로그인</button>
-        </form>
-        <form id="signup-form" class="inline">
-          <input id="signup-username" placeholder="new username" />
-          <input id="signup-email" placeholder="email" />
-          <input id="signup-password" type="password" placeholder="password(8+)" />
-          <button type="submit">회원가입</button>
-        </form>
-        <div class="muted" id="auth-message"></div>
+  <main>
+    <section class="hero">
+      <div class="panel">
+        <div class="pill">Shared Web/App Contract</div>
+        <h1>Signal Flow Live</h1>
+        <p>Web and mobile clients now share one bootstrap API, one dashboard aggregate API, and one asset detail API.</p>
       </div>
-
-      <div>
-        <h2>알림 설정</h2>
-        <label><input type="checkbox" id="web-enabled" checked /> 웹 알림</label>
-        <label style="margin-left: 12px;"><input type="checkbox" id="email-enabled" /> 이메일 알림(저장만)</label>
-        <div class="top-space"><button id="save-settings">설정 저장</button></div>
+      <div class="panel stats">
+        <div class="card"><div class="muted">Socket</div><strong id="socket-status">Connecting</strong></div>
+        <div class="card"><div class="muted">Source</div><strong id="source-status">Loading</strong></div>
+        <div class="card"><div class="muted">Watchlist</div><strong id="watch-count">0</strong></div>
+        <div class="card"><div class="muted">Unread</div><strong id="unread-count">0</strong></div>
       </div>
     </section>
 
-    <section class="card stack">
-      <div>
-        <h2>내 관심 종목</h2>
-        <form id="watch-form" class="inline">
+    <section class="grid">
+      <div class="panel">
+        <h2>Session</h2>
+        <p>Demo account: <code>demo / demo1234</code></p>
+        <div class="forms" style="margin-top:12px;">
+          <label>Username<input id="login-username" value="demo" /></label>
+          <label>Password<input id="login-password" value="demo1234" type="password" /></label>
+        </div>
+        <div class="actions">
+          <button id="login-button">Login</button>
+          <button id="logout-button" class="secondary">Logout</button>
+          <button id="refresh-button" class="secondary">Refresh</button>
+        </div>
+        <div class="forms" style="margin-top:12px;">
+          <label>New Username<input id="signup-username" placeholder="new user" /></label>
+          <label>Email<input id="signup-email" placeholder="name@example.com" /></label>
+        </div>
+        <div class="forms" style="margin-top:12px;">
+          <label>Password<input id="signup-password" type="password" placeholder="minimum 8 characters" /></label>
+          <label>Sign Up<button id="signup-button">Create Account</button></label>
+        </div>
+        <p id="auth-status" class="muted" style="margin-top:12px;">Loading session</p>
+        <p id="auth-message" class="muted"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Watchlist And Alerts</h2>
+        <p>Same state is available to both the browser UI and an app client.</p>
+        <div class="checks">
+          <label><input id="web-enabled" type="checkbox" /> Web alerts</label>
+          <label><input id="email-enabled" type="checkbox" /> Email alerts</label>
+        </div>
+        <div class="actions">
           <select id="watch-symbol"></select>
-          <button type="submit">추가</button>
-        </form>
-        <table class="top-space">
-          <thead>
-            <tr>
-              <th>심볼</th>
-              <th>가격</th>
-              <th>등락률</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="watch-body"></tbody>
-        </table>
-      </div>
-
-      <div>
-        <h2>내 알림</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>시간</th>
-              <th>심볼</th>
-              <th>전략</th>
-              <th>상태</th>
-            </tr>
-          </thead>
-          <tbody id="notification-body"></tbody>
-        </table>
+          <button id="watch-add-button">Add</button>
+          <button id="settings-save-button" class="secondary">Save</button>
+        </div>
+        <div class="scroll" style="margin-top:12px;">
+          <table><thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th></th></tr></thead><tbody id="watch-body"></tbody></table>
+        </div>
       </div>
     </section>
-  </div>
 
-  <div class="grid-3">
-    <section class="card">
-      <h2>시장 개요</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>심볼</th>
-            <th>가격</th>
-            <th>등락률</th>
-            <th>RSI</th>
-            <th>최근 시그널</th>
-          </tr>
-        </thead>
-        <tbody id="overview-body"></tbody>
-      </table>
+    <section class="panel">
+      <h2>Dashboard</h2>
+      <p>Rendered from <code>/api/client/dashboard</code>.</p>
+      <div class="cards" style="margin:12px 0;">
+        <div class="card"><div class="muted">Assets</div><strong id="asset-count">0</strong></div>
+        <div class="card"><div class="muted">Signals</div><strong id="signal-count">0</strong></div>
+        <div class="card"><div class="muted">Notifications</div><strong id="notification-count">0</strong></div>
+        <div class="card"><div class="muted">Selected Asset</div><strong id="selected-asset">None</strong></div>
+      </div>
+      <div class="scroll"><table><thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th>RSI</th><th>Signal</th></tr></thead><tbody id="overview-body"></tbody></table></div>
+      <div class="scroll" style="margin-top:14px;"><table><thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Strategy</th><th>Reason</th></tr></thead><tbody id="signal-body"></tbody></table></div>
     </section>
 
-    <section class="card" style="grid-column: span 2;">
-      <h2>실시간 시그널</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>시간</th>
-            <th>심볼</th>
-            <th>유형</th>
-            <th>전략</th>
-            <th>사유</th>
-          </tr>
-        </thead>
-        <tbody id="signal-body"></tbody>
-      </table>
+    <section class="panel">
+      <h2>Asset Detail</h2>
+      <p>Rendered from <code>/api/client/assets/{symbol}</code>.</p>
+      <div id="asset-summary" class="summary" style="margin:12px 0;"></div>
+      <div class="detail">
+        <div class="scroll"><table><thead><tr><th>Candle Time</th><th>Open</th><th>Close</th><th>High</th><th>Low</th><th>Volume</th></tr></thead><tbody id="candle-body"></tbody></table></div>
+        <div>
+          <div class="scroll"><table><thead><tr><th>Time</th><th>Side</th><th>Strategy</th><th>Score</th></tr></thead><tbody id="asset-signal-body"></tbody></table></div>
+          <div class="scroll" style="margin-top:14px;"><table><thead><tr><th>Time</th><th>Symbol</th><th>Status</th><th>Note</th></tr></thead><tbody id="notification-body"></tbody></table></div>
+        </div>
+      </div>
     </section>
-  </div>
+  </main>
 
   <script>
-    const overviewBody = document.getElementById('overview-body');
-    const signalBody = document.getElementById('signal-body');
-    const watchBody = document.getElementById('watch-body');
-    const notificationBody = document.getElementById('notification-body');
-    const socketStatus = document.getElementById('socket-status');
-    const sourceStatus = document.getElementById('source-status');
-    const watchCount = document.getElementById('watch-count');
-    const signalCount = document.getElementById('signal-count');
-    const unreadCount = document.getElementById('unread-count');
-    const authStatus = document.getElementById('auth-status');
-    const authMessage = document.getElementById('auth-message');
-    const watchSymbol = document.getElementById('watch-symbol');
-    const webEnabled = document.getElementById('web-enabled');
-    const emailEnabled = document.getElementById('email-enabled');
-    let token = localStorage.getItem('signal-flow-token');
-    let currentUser = null;
-    let assetRows = [];
-    let activeSource = 'unknown';
+    const state = { token: localStorage.getItem('signal-flow-token'), apiBase: location.origin, wsUrl: '', assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
+    const el = id => document.getElementById(id);
+    const fmtNum = value => value == null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
+    const fmtPct = value => value == null ? '-' : `${value.toFixed(2)}%`;
+    const fmtTime = value => value ? new Date(value).toLocaleString('ko-KR') : '-';
+    const authHeaders = () => state.token ? { Authorization: `Bearer ${state.token}` } : {};
+    const httpUrl = path => path.startsWith('http') ? path : `${state.apiBase}${path}`;
+    const assetUrl = symbol => httpUrl((state.endpoints.asset_detail || '/api/client/assets/{symbol}').replace('{symbol}', encodeURIComponent(symbol)));
+    const msg = (text, bad = false) => { el('auth-message').textContent = text || ''; el('auth-message').style.color = bad ? 'var(--sell)' : 'var(--muted)'; };
 
-    function formatPrice(value) {
-      return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
+    async function requestJson(path, options = {}) {
+      const response = await fetch(httpUrl(path), { ...options, headers: { ...(options.headers || {}), ...authHeaders() } });
+      const payload = (response.headers.get('content-type') || '').includes('application/json') ? await response.json() : null;
+      if (!response.ok) throw new Error(payload?.detail || `Request failed: ${response.status}`);
+      return payload;
     }
 
-    function authHeaders() {
-      return token ? { 'Authorization': `Bearer ${token}` } : {};
-    }
-
-    function renderAuthStatus() {
-      authStatus.textContent = currentUser
-        ? `로그인됨: ${currentUser.username} (${currentUser.email})`
-        : '로그인 안 됨';
-    }
-
-    function renderOverview(rows) {
-      overviewBody.innerHTML = rows.map(row => {
-        const changeClass = row.change_rate >= 0 ? 'positive' : 'negative';
-        const signalType = row.recent_signal_type || '-';
-        const signalClass = signalType === 'BUY' ? 'buy' : (signalType === 'SELL' ? 'sell' : '');
-        return `
-          <tr>
-            <td>${row.symbol} ${row.in_watchlist ? '<span class="pill">관심</span>' : ''}</td>
-            <td>${formatPrice(row.price)}</td>
-            <td class="${changeClass}">${row.change_rate.toFixed(2)}%</td>
-            <td>${row.rsi14 ? row.rsi14.toFixed(1) : '-'}</td>
-            <td class="${signalClass}">${signalType}</td>
-          </tr>
-        `;
-      }).join('');
-      watchCount.textContent = rows.filter(r => r.in_watchlist).length;
-    }
-
-    function renderSignals(rows) {
-      signalBody.innerHTML = rows.map(row => {
-        const signalClass = row.signal_type === 'BUY' ? 'buy' : 'sell';
-        return `
-          <tr>
-            <td>${new Date(row.created_at).toLocaleTimeString('ko-KR')}</td>
-            <td>${row.symbol}</td>
-            <td class="${signalClass}">${row.signal_type}</td>
-            <td>${row.strategy_name}</td>
-            <td>${row.reason}</td>
-          </tr>
-        `;
-      }).join('');
-      signalCount.textContent = rows.length;
-    }
+    function renderAssetOptions() { el('watch-symbol').innerHTML = state.assets.map(asset => `<option value="${asset.symbol}">${asset.symbol} · ${asset.name}</option>`).join(''); }
+    function renderSession(session) { el('auth-status').textContent = session.authenticated && session.user ? `Signed in as ${session.user.username} (${session.user.email})` : 'Signed out. Use demo or create a new account.'; }
+    function renderSource(source) { const value = `${source.active_source || source.requested_source || 'unknown'}${source.interval ? ` / ${source.interval}` : ''}${source.state ? ` / ${source.state}` : ''}`; el('source-status').textContent = value; }
 
     function renderWatchlist(rows) {
-      watchBody.innerHTML = rows.map(row => `
-        <tr>
-          <td>${row.symbol}</td>
-          <td>${formatPrice(row.last_price)}</td>
-          <td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${row.change_rate.toFixed(2)}%</td>
-          <td><button data-symbol="${row.symbol}" class="delete-watch">삭제</button></td>
-        </tr>
-      `).join('');
+      el('watch-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${row.symbol}</td><td>${fmtNum(row.last_price)}</td><td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</td><td><button class="secondary watch-remove" data-symbol="${row.symbol}">Remove</button></td></tr>`).join('') : '<tr><td colspan="4" class="muted">No watchlist items.</td></tr>';
     }
 
     function renderNotifications(rows) {
-      notificationBody.innerHTML = rows.map(row => `
-        <tr>
-          <td>${new Date(row.created_at).toLocaleTimeString('ko-KR')}</td>
-          <td>${row.symbol} <span class="${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}</span></td>
-          <td>${row.strategy_name}<div class="muted">${row.reason}</div></td>
-          <td>
-            <span class="${row.is_read ? '' : 'notif-unread'}">${row.is_read ? '읽음' : '미확인'}</span>
-            ${row.is_read ? '' : `<div class="top-space"><button data-id="${row.id}" class="read-notif">읽음 처리</button></div>`}
-          </td>
-        </tr>
-      `).join('');
-      unreadCount.textContent = rows.filter(row => !row.is_read).length;
+      el('notification-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${fmtTime(row.created_at)}</td><td>${row.symbol}</td><td class="${row.is_read ? 'muted' : 'buy'}">${row.is_read ? 'Read' : 'Unread'}</td><td>${row.strategy_name}<div class="muted">${row.reason}</div>${row.is_read ? '' : `<div style="margin-top:8px;"><button class="secondary notif-read" data-id="${row.id}">Mark Read</button></div>`}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">No notifications.</td></tr>';
     }
 
-    function populateAssetSelect() {
-      watchSymbol.innerHTML = assetRows.map(row => `<option value="${row.symbol}">${row.symbol} - ${row.name}</option>`).join('');
+    function renderSignals(rows) {
+      el('signal-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${fmtTime(row.created_at)}</td><td>${row.symbol}</td><td class="${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}</td><td>${row.strategy_name}</td><td>${row.reason}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">No recent signals.</td></tr>';
     }
 
-
-    async function loadSourceStatus() {
-      const response = await fetch('/api/source-status');
-      const data = await response.json();
-      activeSource = data.active_source || data.requested_source || 'unknown';
-      const interval = data.interval ? ` / ${data.interval}` : '';
-      const state = data.state ? ` (${data.state})` : '';
-      sourceStatus.textContent = `${activeSource}${interval}${state}`;
+    function renderOverview(rows) {
+      el('overview-body').innerHTML = rows.length ? rows.map(row => `<tr class="asset-row ${state.selectedSymbol === row.symbol ? 'selected' : ''}" data-symbol="${row.symbol}"><td>${row.symbol}${row.in_watchlist ? ' <span class="pill">Watch</span>' : ''}</td><td>${fmtNum(row.price)}</td><td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</td><td>${row.rsi14 == null ? '-' : row.rsi14.toFixed(1)}</td><td class="${row.recent_signal_type === 'BUY' ? 'buy' : row.recent_signal_type === 'SELL' ? 'sell' : ''}">${row.recent_signal_type || '-'}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">No overview data.</td></tr>';
     }
 
-    async function loadAssets() {
-      const response = await fetch('/api/assets');
-      assetRows = await response.json();
-      populateAssetSelect();
+    function renderDetail(detail) {
+      el('selected-asset').textContent = `${detail.asset.symbol} / ${detail.interval_type || 'default'}`;
+      const snapshot = detail.snapshot || {};
+      const summary = [['Price', fmtNum(detail.asset.last_price)], ['Change', `<span class="${detail.asset.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(detail.asset.change_rate)}</span>`], ['RSI 14', snapshot.rsi14 == null ? '-' : snapshot.rsi14.toFixed(1)], ['SMA 5', snapshot.sma5 == null ? '-' : fmtNum(snapshot.sma5)], ['SMA 20', snapshot.sma20 == null ? '-' : fmtNum(snapshot.sma20)]];
+      el('asset-summary').innerHTML = summary.map(([label, value]) => `<div class="summary-item"><div class="muted">${label}</div><strong>${value}</strong></div>`).join('');
+      el('candle-body').innerHTML = detail.candles.length ? detail.candles.slice(-8).reverse().map(row => `<tr><td>${fmtTime(row.candle_time)}</td><td>${fmtNum(row.open_price)}</td><td>${fmtNum(row.close_price)}</td><td>${fmtNum(row.high_price)}</td><td>${fmtNum(row.low_price)}</td><td>${fmtNum(row.volume)}</td></tr>`).join('') : '<tr><td colspan="6" class="muted">No candle data.</td></tr>';
+      el('asset-signal-body').innerHTML = detail.signals.length ? detail.signals.map(row => `<tr><td>${fmtTime(row.created_at)}</td><td class="${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}</td><td>${row.strategy_name}</td><td>${row.score.toFixed(1)}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">No asset signals.</td></tr>';
     }
 
-    async function loadOverview() {
-      const response = await fetch('/api/market/overview', { headers: authHeaders() });
-      const data = await response.json();
-      renderOverview(data);
+    async function loadBootstrap() {
+      const data = await requestJson(state.endpoints.bootstrap);
+      state.apiBase = data.platforms.find(item => item.name === 'web')?.api_base_url || location.origin;
+      state.wsUrl = data.platforms.find(item => item.name === 'web')?.websocket_url || `${location.origin.replace(/^http/, 'ws')}/ws/stream`;
+      state.endpoints = data.endpoints;
+      state.assets = data.catalog.assets;
+      renderSession(data.session); renderSource(data.source); renderAssetOptions();
     }
 
-    async function loadSignals() {
-      const response = await fetch('/api/signals/recent?limit=12');
-      const data = await response.json();
-      renderSignals(data);
+    async function loadDashboard() {
+      const data = await requestJson(state.endpoints.dashboard);
+      renderSession(data.session); renderSource(data.source); renderOverview(data.overview); renderSignals(data.signals); renderWatchlist(data.watchlist); renderNotifications(data.notifications);
+      el('web-enabled').checked = data.notification_settings?.web_enabled ?? true;
+      el('email-enabled').checked = data.notification_settings?.email_enabled ?? false;
+      el('asset-count').textContent = data.counts.assets; el('signal-count').textContent = data.counts.recent_signals; el('notification-count').textContent = data.counts.notifications; el('watch-count').textContent = data.counts.watchlist; el('unread-count').textContent = data.counts.unread_notifications;
+      if (!state.selectedSymbol && data.overview.length) state.selectedSymbol = data.overview[0].symbol;
+      if (state.selectedSymbol) { await loadDetail(state.selectedSymbol); renderOverview(data.overview); }
     }
 
-    async function loadMe() {
-      if (!token) {
-        currentUser = null;
-        renderAuthStatus();
-        return;
-      }
-      const response = await fetch('/api/auth/me', { headers: authHeaders() });
-      if (!response.ok) {
-        token = null;
-        currentUser = null;
-        localStorage.removeItem('signal-flow-token');
-        renderAuthStatus();
-        return;
-      }
-      currentUser = await response.json();
-      renderAuthStatus();
-    }
-
-    async function loadWatchlist() {
-      if (!token) {
-        watchBody.innerHTML = '<tr><td colspan="4" class="muted">로그인 후 확인 가능합니다.</td></tr>';
-        return;
-      }
-      const response = await fetch('/api/watchlist', { headers: authHeaders() });
-      const data = await response.json();
-      renderWatchlist(data);
-    }
-
-    async function loadNotifications() {
-      if (!token) {
-        notificationBody.innerHTML = '<tr><td colspan="4" class="muted">로그인 후 확인 가능합니다.</td></tr>';
-        unreadCount.textContent = '0';
-        return;
-      }
-      const response = await fetch('/api/notifications?limit=10', { headers: authHeaders() });
-      const data = await response.json();
-      renderNotifications(data);
-    }
-
-    async function loadNotificationSettings() {
-      if (!token) {
-        webEnabled.checked = true;
-        emailEnabled.checked = false;
-        return;
-      }
-      const response = await fetch('/api/notification-settings', { headers: authHeaders() });
-      if (!response.ok) return;
-      const data = await response.json();
-      webEnabled.checked = data.web_enabled;
-      emailEnabled.checked = data.email_enabled;
-    }
-
-    async function authenticate(endpoint, payload) {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        authMessage.textContent = data.detail || '인증에 실패했습니다.';
-        return;
-      }
-      token = data.access_token;
-      localStorage.setItem('signal-flow-token', token);
-      currentUser = data.user;
-      authMessage.textContent = `${currentUser.username} 계정으로 인증되었습니다.`;
-      renderAuthStatus();
-      await refreshAll();
-    }
-
-    async function refreshAll() {
-      await Promise.all([
-        loadAssets(),
-        loadSourceStatus(),
-        loadMe(),
-        loadOverview(),
-        loadSignals(),
-        loadWatchlist(),
-        loadNotifications(),
-        loadNotificationSettings(),
-      ]);
-    }
-
-    document.getElementById('login-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      await authenticate('/api/auth/login', {
-        username: document.getElementById('login-username').value,
-        password: document.getElementById('login-password').value,
-      });
-    });
-
-    document.getElementById('signup-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      await authenticate('/api/auth/signup', {
-        username: document.getElementById('signup-username').value,
-        email: document.getElementById('signup-email').value,
-        password: document.getElementById('signup-password').value,
-      });
-    });
-
-    document.getElementById('save-settings').addEventListener('click', async () => {
-      if (!token) {
-        authMessage.textContent = '로그인 후 저장할 수 있습니다.';
-        return;
-      }
-      await fetch('/api/notification-settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ web_enabled: webEnabled.checked, email_enabled: emailEnabled.checked }),
-      });
-      authMessage.textContent = '알림 설정을 저장했습니다.';
-    });
-
-    document.getElementById('watch-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      if (!token) {
-        authMessage.textContent = '로그인 후 관심 종목을 추가할 수 있습니다.';
-        return;
-      }
-      await fetch('/api/watchlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ symbol: watchSymbol.value }),
-      });
-      await refreshAll();
-    });
-
-    watchBody.addEventListener('click', async (event) => {
-      const button = event.target.closest('.delete-watch');
-      if (!button) return;
-      await fetch(`/api/watchlist/${button.dataset.symbol}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      await refreshAll();
-    });
-
-    notificationBody.addEventListener('click', async (event) => {
-      const button = event.target.closest('.read-notif');
-      if (!button) return;
-      await fetch(`/api/notifications/${button.dataset.id}/read`, {
-        method: 'PATCH',
-        headers: authHeaders(),
-      });
-      await refreshAll();
-    });
+    async function loadDetail(symbol) { state.selectedSymbol = symbol; const data = await requestJson(assetUrl(symbol)); renderDetail(data); }
+    async function refreshAll() { try { await loadBootstrap(); await loadDashboard(); } catch (error) { msg(error.message, true); } }
+    function scheduleRefresh() { if (state.refreshTimer) return; state.refreshTimer = setTimeout(async () => { state.refreshTimer = null; await refreshAll(); }, 350); }
 
     function connectSocket() {
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const socket = new WebSocket(`${protocol}://${window.location.host}/ws/stream`);
-      socketStatus.textContent = '연결 중';
-
-      socket.onopen = () => {
-        socketStatus.textContent = '연결됨';
-        setInterval(() => {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send('ping');
-          }
-        }, 3000);
-      };
-
-      socket.onmessage = async (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === 'signal' || message.type === 'market_snapshot') {
-          await Promise.all([loadOverview(), loadSignals(), loadWatchlist(), loadNotifications()]);
-        }
-      };
-
-      socket.onclose = () => {
-        socketStatus.textContent = '재연결 중';
-        setTimeout(connectSocket, 2000);
-      };
+      if (!state.wsUrl) return;
+      if (state.socket) try { state.socket.close(); } catch (_) {}
+      clearInterval(state.heartbeat);
+      state.socket = new WebSocket(state.wsUrl);
+      el('socket-status').textContent = 'Connecting';
+      state.socket.onopen = () => { el('socket-status').textContent = 'Live'; state.heartbeat = setInterval(() => { if (state.socket?.readyState === WebSocket.OPEN) state.socket.send('ping'); }, 3000); };
+      state.socket.onmessage = () => scheduleRefresh();
+      state.socket.onclose = () => { clearInterval(state.heartbeat); el('socket-status').textContent = 'Reconnecting'; setTimeout(connectSocket, 1800); };
     }
 
-    refreshAll();
-    connectSocket();
+    async function login() {
+      try { const data = await requestJson(state.endpoints.login, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('login-username').value, password: el('login-password').value }) }); state.token = data.access_token; localStorage.setItem('signal-flow-token', state.token); msg(`Signed in as ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
+    }
+    async function signup() {
+      try { const data = await requestJson(state.endpoints.signup, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('signup-username').value, email: el('signup-email').value, password: el('signup-password').value }) }); state.token = data.access_token; localStorage.setItem('signal-flow-token', state.token); msg(`Created ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
+    }
+    async function logout() { state.token = null; localStorage.removeItem('signal-flow-token'); msg('Signed out.'); await refreshAll(); }
+    async function addWatch() { try { await requestJson(state.endpoints.watchlist, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: el('watch-symbol').value }) }); await loadDashboard(); msg(`Added ${el('watch-symbol').value}.`); } catch (error) { msg(error.message, true); } }
+    async function saveSettings() { try { await requestJson(state.endpoints.notification_settings, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web_enabled: el('web-enabled').checked, email_enabled: el('email-enabled').checked }) }); await loadDashboard(); msg('Settings saved.'); } catch (error) { msg(error.message, true); } }
+    async function removeWatch(symbol) { try { await requestJson(`${state.endpoints.watchlist}/${encodeURIComponent(symbol)}`, { method: 'DELETE' }); await loadDashboard(); msg(`Removed ${symbol}.`); } catch (error) { msg(error.message, true); } }
+    async function readNotification(id) { try { await requestJson(`${state.endpoints.notifications}/${id}/read`, { method: 'PATCH' }); await loadDashboard(); msg('Notification marked as read.'); } catch (error) { msg(error.message, true); } }
+
+    el('login-button').addEventListener('click', login); el('signup-button').addEventListener('click', signup); el('logout-button').addEventListener('click', logout); el('refresh-button').addEventListener('click', refreshAll); el('watch-add-button').addEventListener('click', addWatch); el('settings-save-button').addEventListener('click', saveSettings);
+    el('overview-body').addEventListener('click', async event => { const row = event.target.closest('tr[data-symbol]'); if (!row) return; await loadDetail(row.dataset.symbol); await loadDashboard(); });
+    el('watch-body').addEventListener('click', async event => { const button = event.target.closest('.watch-remove'); if (button) await removeWatch(button.dataset.symbol); });
+    el('notification-body').addEventListener('click', async event => { const button = event.target.closest('.notif-read'); if (button) await readNotification(button.dataset.id); });
+
+    (async () => { await refreshAll(); connectSocket(); })();
   </script>
 </body>
 </html>

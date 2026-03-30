@@ -5,16 +5,19 @@ import contextlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, db
+from . import auth, client_api, db
 from .broadcaster import Broadcaster
-from .config import APP_VERSION, BASE_DIR
+from .config import APP_NAME, APP_VERSION, BASE_DIR, CORS_ORIGINS
 from .runtime import MarketRuntime
 from .schemas import (
+    ClientAssetDetailResponse,
+    ClientBootstrapResponse,
+    ClientDashboardResponse,
     NotificationSettingsUpdateRequest,
     StrategyCreateRequest,
     StrategyToggleRequest,
@@ -22,7 +25,6 @@ from .schemas import (
     UserSignupRequest,
     WatchlistCreateRequest,
 )
-from .strategy_engine import build_snapshot
 
 STATIC_DIR = BASE_DIR / 'static'
 
@@ -55,14 +57,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title='Signal Flow Live',
+    title=APP_NAME,
     description='실시간 주식/코인 시그널 분석 플랫폼 데모',
     version=APP_VERSION,
     lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
+    allow_origins=CORS_ORIGINS or ['*'],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
@@ -90,6 +92,48 @@ def health() -> dict[str, object]:
 @app.get('/api/source-status')
 def source_status() -> dict[str, object]:
     return runtime.status()
+
+
+@app.get('/api/client/bootstrap', response_model=ClientBootstrapResponse)
+def client_bootstrap(request: Request, current_user: dict | None = Depends(auth.get_optional_user)):
+    return client_api.build_bootstrap_payload(
+        request,
+        current_user,
+        source_status=runtime.status(),
+    )
+
+
+@app.get('/api/client/dashboard', response_model=ClientDashboardResponse)
+def client_dashboard(
+    current_user: dict | None = Depends(auth.get_optional_user),
+    signal_limit: int = 12,
+    notification_limit: int = 10,
+):
+    return client_api.build_dashboard_payload(
+        current_user,
+        source_status=runtime.status(),
+        interval_type=_active_interval_type(),
+        signal_limit=signal_limit,
+        notification_limit=notification_limit,
+    )
+
+
+@app.get('/api/client/assets/{symbol}', response_model=ClientAssetDetailResponse)
+def client_asset_detail(
+    symbol: str,
+    interval_type: str | None = None,
+    candle_limit: int = 60,
+    signal_limit: int = 20,
+):
+    detail = client_api.build_asset_detail_payload(
+        symbol,
+        interval_type=interval_type or _active_interval_type(),
+        candle_limit=candle_limit,
+        signal_limit=signal_limit,
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail='Asset not found')
+    return detail
 
 
 @app.post('/api/auth/signup', status_code=status.HTTP_201_CREATED)
@@ -238,70 +282,7 @@ def delete_watchlist(symbol: str, current_user: dict = Depends(auth.get_current_
 
 @app.get('/api/market/overview')
 def market_overview(current_user: dict | None = Depends(auth.get_optional_user)):
-    assets = db.fetch_all('SELECT * FROM assets ORDER BY symbol ASC')
-    effective_interval = _active_interval_type()
-    watchlist_symbols = set()
-    if current_user:
-        watchlist_symbols = {
-            row['symbol']
-            for row in db.fetch_all('SELECT symbol FROM watchlists WHERE user_name = ?', (current_user['username'],))
-        }
-
-    latest_signals = {
-        row['symbol']: row
-        for row in db.fetch_all(
-            '''
-            SELECT s1.*
-            FROM signals s1
-            JOIN (
-              SELECT symbol, MAX(created_at) AS created_at
-              FROM signals
-              GROUP BY symbol
-            ) s2 ON s1.symbol = s2.symbol AND s1.created_at = s2.created_at
-            '''
-        )
-    }
-
-    overview: list[dict] = []
-    for asset in assets:
-        candles = db.fetch_recent_candles(asset['symbol'], 120, interval_type=effective_interval)
-        if candles:
-            snapshot = build_snapshot(asset['symbol'], candles)
-            signal = latest_signals.get(asset['symbol'])
-            overview.append(
-                {
-                    'symbol': asset['symbol'],
-                    'name': asset['name'],
-                    'price': asset['last_price'],
-                    'change_rate': asset['change_rate'],
-                    'rsi14': snapshot.rsi14,
-                    'sma5': snapshot.sma5,
-                    'sma20': snapshot.sma20,
-                    'bollinger_upper': snapshot.bollinger_upper,
-                    'bollinger_lower': snapshot.bollinger_lower,
-                    'recent_signal_type': signal['signal_type'] if signal else None,
-                    'recent_signal_reason': signal['reason'] if signal else None,
-                    'in_watchlist': asset['symbol'] in watchlist_symbols,
-                }
-            )
-        else:
-            overview.append(
-                {
-                    'symbol': asset['symbol'],
-                    'name': asset['name'],
-                    'price': asset['last_price'],
-                    'change_rate': asset['change_rate'],
-                    'rsi14': None,
-                    'sma5': None,
-                    'sma20': None,
-                    'bollinger_upper': None,
-                    'bollinger_lower': None,
-                    'recent_signal_type': None,
-                    'recent_signal_reason': None,
-                    'in_watchlist': asset['symbol'] in watchlist_symbols,
-                }
-            )
-    return overview
+    return client_api.build_market_overview(current_user, interval_type=_active_interval_type())
 
 
 @app.get('/api/notifications')

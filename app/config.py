@@ -7,7 +7,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / 'data'
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / 'signal_flow.db'
-APP_VERSION = '0.3.0'
+APP_NAME = 'Signal Flow Live'
+APP_VERSION = '0.4.0'
+APP_ENV = os.getenv('SIGNAL_FLOW_APP_ENV', 'development').strip().lower()
 
 DEMO_USER = 'demo'
 DEMO_EMAIL = 'demo@signal-flow.local'
@@ -24,6 +26,20 @@ def _is_truthy(raw: str | None, *, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
+
+
+def _parse_csv(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    values: list[str] = []
+    seen: set[str] = set()
+    for item in raw.split(','):
+        value = item.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        values.append(value)
+    return values
 
 
 DEFAULT_SYMBOL_META = {
@@ -73,6 +89,9 @@ UPBIT_WS_PING_INTERVAL_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_WS_PING_INTE
 UPBIT_WS_PING_TIMEOUT_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_WS_PING_TIMEOUT_SECONDS', '10'))
 UPBIT_RECONNECT_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_RECONNECT_SECONDS', '2'))
 MARKET_SNAPSHOT_PUSH_SECONDS = float(os.getenv('SIGNAL_FLOW_MARKET_SNAPSHOT_PUSH_SECONDS', '1'))
+PUBLIC_API_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_API_BASE_URL', '').strip().rstrip('/')
+PUBLIC_WS_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_WS_BASE_URL', '').strip().rstrip('/')
+CORS_ORIGINS = _parse_csv(os.getenv('SIGNAL_FLOW_CORS_ORIGINS'))
 
 
 SUPPORTED_UPBIT_INTERVALS = {'1s', '1m', '3m', '5m', '10m', '15m', '30m', '60m', '240m'}
