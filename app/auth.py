@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from . import db
+from . import db, mailer
 from .config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     AUTH_TOKEN_PREVIEW_ENABLED,
@@ -214,11 +214,16 @@ def create_email_verification(user: dict[str, Any]) -> dict[str, Any]:
         email=user['email'],
         expires_at=db.isoformat(db.utc_now() + timedelta(hours=EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS)),
     )
+    delivery = mailer.send_email_verification(
+        recipient=user['email'],
+        token=token,
+        expires_at=record['expires_at'],
+    )
     return {
         'status': 'ok',
         'expires_at': record['expires_at'],
-        'delivery': 'preview' if AUTH_TOKEN_PREVIEW_ENABLED else 'pending_email_delivery',
-        'preview': _token_preview_payload(token),
+        'delivery': delivery['delivery'] if delivery['delivery'] != 'preview' or AUTH_TOKEN_PREVIEW_ENABLED else 'accepted',
+        'preview': _token_preview_payload(token) if delivery['delivery'] == 'preview' else None,
     }
 
 
@@ -248,11 +253,16 @@ def create_password_reset(email: str) -> dict[str, Any]:
         email=user['email'],
         expires_at=db.isoformat(db.utc_now() + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)),
     )
+    delivery = mailer.send_password_reset(
+        recipient=user['email'],
+        token=token,
+        expires_at=record['expires_at'],
+    )
     return {
         'status': 'ok',
         'expires_at': record['expires_at'],
-        'delivery': 'preview' if AUTH_TOKEN_PREVIEW_ENABLED else 'pending_email_delivery',
-        'preview': _token_preview_payload(token),
+        'delivery': delivery['delivery'] if delivery['delivery'] != 'preview' or AUTH_TOKEN_PREVIEW_ENABLED else 'accepted',
+        'preview': _token_preview_payload(token) if delivery['delivery'] == 'preview' else None,
     }
 
 

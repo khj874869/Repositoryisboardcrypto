@@ -146,7 +146,7 @@ def _evaluate_score_combo(snapshot: IndicatorSnapshot, strategy: dict) -> Signal
     if None not in (snapshot.sma5, snapshot.sma20) and snapshot.sma5 > snapshot.sma20:
         score += 25
         reasons.append('단기 추세 우위')
-
+   
     if score >= threshold:
         return SignalDecision(
             signal_type='BUY',
@@ -155,3 +155,5 @@ def _evaluate_score_combo(snapshot: IndicatorSnapshot, strategy: dict) -> Signal
             reason=', '.join(reasons) or '복합 점수 충족',
         )
     return None
+
+

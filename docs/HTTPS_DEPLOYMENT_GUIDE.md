@@ -10,6 +10,13 @@ Create a production `.env` file or export these variables before deployment:
 SIGNAL_FLOW_DOMAIN=signals.example.com
 SIGNAL_FLOW_SECRET_KEY=replace-this-with-a-real-secret
 DATABASE_URL=postgresql+psycopg://signalflow:password@db-host:5432/signal_flow
+SIGNAL_FLOW_AUTH_TOKEN_PREVIEW_ENABLED=false
+SIGNAL_FLOW_AUTH_EMAIL_DELIVERY_MODE=smtp
+SIGNAL_FLOW_AUTH_EMAIL_FROM_ADDRESS=alerts@example.com
+SIGNAL_FLOW_AUTH_SMTP_HOST=smtp.example.com
+SIGNAL_FLOW_AUTH_SMTP_PORT=587
+SIGNAL_FLOW_AUTH_SMTP_USERNAME=alerts@example.com
+SIGNAL_FLOW_AUTH_SMTP_PASSWORD=app-password
 SIGNAL_FLOW_ANDROID_PACKAGE_NAME=
 SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS=
 ```
@@ -74,6 +81,8 @@ Expected results:
 - `/api/health` returns `status=ok`
 - `/api/readiness` returns `status=ready`
 - `/api/release-status` returns `ready_for_hosted_pwa=true`
+- `/api/release-status` returns `auth.email_delivery_mode=smtp`
+- `/api/release-status` returns `auth.email_delivery_ready=true`
 
 ## Notes
 

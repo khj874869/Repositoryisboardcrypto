@@ -18,12 +18,15 @@ from .config import (
     APP_VERSION,
     ANDROID_PACKAGE_NAME,
     ANDROID_SHA256_CERT_FINGERPRINTS,
+    AUTH_EMAIL_DELIVERY_MODE,
+    AUTH_TOKEN_PREVIEW_ENABLED,
     BASE_DIR,
     CORS_ORIGINS,
     enforce_runtime_requirements,
     PUBLIC_API_BASE_URL,
     PUBLIC_WEB_BASE_URL,
     PUBLIC_WS_BASE_URL,
+    auth_email_delivery_ready,
     runtime_config_issues,
 )
 from .runtime import MarketRuntime
@@ -201,6 +204,11 @@ def release_status() -> dict[str, object]:
             'package_name': ANDROID_PACKAGE_NAME,
             'sha256_cert_fingerprints': ANDROID_SHA256_CERT_FINGERPRINTS,
             'assetlinks_ready': assetlinks_ready,
+        },
+        'auth': {
+            'email_delivery_mode': AUTH_EMAIL_DELIVERY_MODE,
+            'token_preview_enabled': AUTH_TOKEN_PREVIEW_ENABLED,
+            'email_delivery_ready': auth_email_delivery_ready(),
         },
         'issues': issues,
         'ready_for_hosted_pwa': not issues

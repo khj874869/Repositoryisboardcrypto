@@ -52,6 +52,15 @@ AUTH_TOKEN_PREVIEW_ENABLED = _is_truthy(
     os.getenv('SIGNAL_FLOW_AUTH_TOKEN_PREVIEW_ENABLED'),
     default=not IS_PRODUCTION,
 )
+AUTH_EMAIL_DELIVERY_MODE = os.getenv('SIGNAL_FLOW_AUTH_EMAIL_DELIVERY_MODE', 'preview').strip().lower() or 'preview'
+AUTH_EMAIL_FROM_ADDRESS = os.getenv('SIGNAL_FLOW_AUTH_EMAIL_FROM_ADDRESS', '').strip()
+AUTH_EMAIL_FROM_NAME = os.getenv('SIGNAL_FLOW_AUTH_EMAIL_FROM_NAME', APP_NAME).strip() or APP_NAME
+AUTH_SMTP_HOST = os.getenv('SIGNAL_FLOW_AUTH_SMTP_HOST', '').strip()
+AUTH_SMTP_PORT = int(os.getenv('SIGNAL_FLOW_AUTH_SMTP_PORT', '587'))
+AUTH_SMTP_USERNAME = os.getenv('SIGNAL_FLOW_AUTH_SMTP_USERNAME', '').strip()
+AUTH_SMTP_PASSWORD = os.getenv('SIGNAL_FLOW_AUTH_SMTP_PASSWORD', '')
+AUTH_SMTP_USE_SSL = _is_truthy(os.getenv('SIGNAL_FLOW_AUTH_SMTP_USE_SSL'), default=False)
+AUTH_SMTP_USE_STARTTLS = _is_truthy(os.getenv('SIGNAL_FLOW_AUTH_SMTP_USE_STARTTLS'), default=not AUTH_SMTP_USE_SSL)
 
 
 DEFAULT_SYMBOL_META = {
@@ -143,6 +152,14 @@ def runtime_config_issues() -> list[str]:
         issues.append('SIGNAL_FLOW_PUBLIC_WS_BASE_URL must use wss://')
     if ANDROID_PACKAGE_NAME and not ANDROID_SHA256_CERT_FINGERPRINTS:
         issues.append('SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS should be set when SIGNAL_FLOW_ANDROID_PACKAGE_NAME is set')
+    if AUTH_EMAIL_DELIVERY_MODE not in {'preview', 'smtp'}:
+        issues.append('SIGNAL_FLOW_AUTH_EMAIL_DELIVERY_MODE must be preview or smtp')
+    if IS_PRODUCTION and AUTH_TOKEN_PREVIEW_ENABLED:
+        issues.append('SIGNAL_FLOW_AUTH_TOKEN_PREVIEW_ENABLED must be disabled for production')
+    if IS_PRODUCTION and AUTH_EMAIL_DELIVERY_MODE != 'smtp':
+        issues.append('SIGNAL_FLOW_AUTH_EMAIL_DELIVERY_MODE should be smtp for production')
+    if AUTH_EMAIL_DELIVERY_MODE == 'smtp' and not auth_email_delivery_ready():
+        issues.append('SMTP auth email delivery is enabled but SMTP settings are incomplete')
     return issues
 
 
@@ -150,3 +167,7 @@ def enforce_runtime_requirements() -> None:
     issues = runtime_config_issues()
     if STRICT_STARTUP_VALIDATION and issues:
         raise RuntimeError('; '.join(issues))
+
+
+def auth_email_delivery_ready() -> bool:
+    return bool(AUTH_EMAIL_FROM_ADDRESS and AUTH_SMTP_HOST and AUTH_SMTP_PORT)

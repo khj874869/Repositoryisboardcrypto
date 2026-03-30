@@ -22,6 +22,8 @@ def test_build_env_values_renders_expected_urls() -> None:
     assert values.domain == 'signals.example.com'
     assert values.android_package_name == 'com.example.signals.signalflow'
     rendered = values.render()
+    assert 'SIGNAL_FLOW_AUTH_EMAIL_DELIVERY_MODE=smtp' in rendered
+    assert 'SIGNAL_FLOW_AUTH_EMAIL_FROM_ADDRESS=alerts@signals.example.com' in rendered
     assert 'SIGNAL_FLOW_PUBLIC_WEB_BASE_URL=https://signals.example.com' in rendered
     assert 'SIGNAL_FLOW_PUBLIC_WS_BASE_URL=wss://signals.example.com/ws/stream' in rendered
     assert 'SIGNAL_FLOW_ANDROID_SHA256_CERT_FINGERPRINTS=AA:BB' in rendered

@@ -27,6 +27,9 @@ def test_release_status_reports_https_and_android_readiness(tmp_path, monkeypatc
     monkeypatch.setattr(main, 'PUBLIC_WS_BASE_URL', 'wss://signals.example.com/ws/stream')
     monkeypatch.setattr(main, 'ANDROID_PACKAGE_NAME', 'com.signalflow.live')
     monkeypatch.setattr(main, 'ANDROID_SHA256_CERT_FINGERPRINTS', ['AA:BB:CC'])
+    monkeypatch.setattr(main, 'AUTH_EMAIL_DELIVERY_MODE', 'smtp')
+    monkeypatch.setattr(main, 'AUTH_TOKEN_PREVIEW_ENABLED', False)
+    monkeypatch.setattr(main, 'auth_email_delivery_ready', lambda: True)
 
     with create_client(tmp_path, monkeypatch) as client:
         response = client.get('/api/release-status')
@@ -35,6 +38,8 @@ def test_release_status_reports_https_and_android_readiness(tmp_path, monkeypatc
         assert payload['ready_for_hosted_pwa'] is True
         assert payload['ready_for_android_packaging'] is True
         assert payload['android']['assetlinks_ready'] is True
+        assert payload['auth']['email_delivery_mode'] == 'smtp'
+        assert payload['auth']['email_delivery_ready'] is True
 
 
 def test_assetlinks_route_returns_configured_statement(tmp_path, monkeypatch) -> None:
