@@ -56,7 +56,6 @@ def send_email(*, recipient: str, subject: str, text_body: str, html_body: str |
             client.login(AUTH_SMTP_USERNAME, AUTH_SMTP_PASSWORD)
         client.send_message(message)
 
-
 def _public_url(path: str) -> str:
     base = PUBLIC_WEB_BASE_URL or PUBLIC_API_BASE_URL
     if base:

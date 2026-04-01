@@ -29,8 +29,6 @@ def rsi(closes: list[float], period: int = 14) -> float | None:
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 4)
 
-
-
 def bollinger(values: list[float], period: int = 20, k: float = 2.0) -> tuple[float, float, float] | None:
     if len(values) < period:
         return None
@@ -42,3 +40,6 @@ def bollinger(values: list[float], period: int = 20, k: float = 2.0) -> tuple[fl
     upper = round(mean + (k * std), 4)
     lower = round(mean - (k * std), 4)
     return round(upper, 4), round(mean, 4), round(lower, 4)
+
+
+

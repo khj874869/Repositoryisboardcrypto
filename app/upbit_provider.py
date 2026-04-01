@@ -204,7 +204,7 @@ class UpbitMarketStream:
         payload = response.json()
         normalized = [normalize_rest_candle(row, interval_type=self.interval_type) for row in reversed(payload)]
         return normalized
-
+    
     async def _stream_loop(self) -> None:
         subscription_message = json.dumps(
             [
@@ -279,7 +279,7 @@ class UpbitMarketStream:
             change_rate=None,
             candle_time=candle['candle_time'],
         )
-
+    
     async def _push_market_snapshot(
         self,
         *,
