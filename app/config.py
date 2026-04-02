@@ -66,7 +66,7 @@ AUTH_SMTP_USE_STARTTLS = _is_truthy(os.getenv('SIGNAL_FLOW_AUTH_SMTP_USE_STARTTL
 DEFAULT_SYMBOL_META = {
     'KRW-BTC': {'name': 'Bitcoin', 'market_type': 'COIN', 'base_price': 145_000_000.0, 'volatility': 0.006},
     'KRW-ETH': {'name': 'Ethereum', 'market_type': 'COIN', 'base_price': 5_100_000.0, 'volatility': 0.008},
-    'KRW-XRP': {'name': 'XRP', 'market_type': 'COIN', 'base_price': 920.0, 'volatility': 0.015},
+    'KRW-XRP': {'name': 'XRP', 'market_type': 'COIN', 'base_price': 920.0, 'volatility': 0.015}
 }
 
 
@@ -110,6 +110,20 @@ UPBIT_WS_PING_INTERVAL_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_WS_PING_INTE
 UPBIT_WS_PING_TIMEOUT_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_WS_PING_TIMEOUT_SECONDS', '10'))
 UPBIT_RECONNECT_SECONDS = float(os.getenv('SIGNAL_FLOW_UPBIT_RECONNECT_SECONDS', '2'))
 MARKET_SNAPSHOT_PUSH_SECONDS = float(os.getenv('SIGNAL_FLOW_MARKET_SNAPSHOT_PUSH_SECONDS', '1'))
+SCANNER_REFRESH_SECONDS = float(os.getenv('SIGNAL_FLOW_SCANNER_REFRESH_SECONDS', '20'))
+SCANNER_PROVIDER = os.getenv('SIGNAL_FLOW_SCANNER_PROVIDER', 'synthetic').strip().lower() or 'synthetic'
+SCANNER_PROVIDER_FALLBACK_TO_SYNTHETIC = _is_truthy(
+    os.getenv('SIGNAL_FLOW_SCANNER_PROVIDER_FALLBACK_TO_SYNTHETIC'),
+    default=True,
+)
+SCANNER_YAHOO_BASE_URL = os.getenv('SIGNAL_FLOW_SCANNER_YAHOO_BASE_URL', 'https://query1.finance.yahoo.com').strip().rstrip('/')
+SCANNER_YAHOO_RANGE = os.getenv('SIGNAL_FLOW_SCANNER_YAHOO_RANGE', '3mo').strip().lower() or '3mo'
+SCANNER_YAHOO_TIMEOUT_SECONDS = float(os.getenv('SIGNAL_FLOW_SCANNER_YAHOO_TIMEOUT_SECONDS', '10'))
+SCANNER_ALERT_ALLOWED_SESSIONS = set(_parse_csv(os.getenv('SIGNAL_FLOW_SCANNER_ALERT_ALLOWED_SESSIONS', 'regular')))
+SCANNER_ALERT_ALLOW_DELAYED = _is_truthy(
+    os.getenv('SIGNAL_FLOW_SCANNER_ALERT_ALLOW_DELAYED'),
+    default=False,
+)
 PUBLIC_API_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_API_BASE_URL', '').strip().rstrip('/')
 PUBLIC_WEB_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_WEB_BASE_URL', '').strip().rstrip('/')
 PUBLIC_WS_BASE_URL = os.getenv('SIGNAL_FLOW_PUBLIC_WS_BASE_URL', '').strip().rstrip('/')

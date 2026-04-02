@@ -89,6 +89,40 @@ class AssetResponse(BaseModel):
     updated_at: str
 
 
+class InstrumentCapabilitiesResponse(BaseModel):
+    has_realtime_feed: bool
+    has_volume_feed: bool
+    has_orderbook_feed: bool
+    has_derivatives_feed: bool
+    supports_indicator_profiles: bool
+
+
+class InstrumentRuntimeResponse(BaseModel):
+    data_mode: str
+    data_source: str
+    interval_type: str
+    market_session: str
+    is_delayed: bool
+    as_of: str
+    updated_at: str
+
+
+class InstrumentResponse(BaseModel):
+    symbol: str
+    name: str
+    market_type: str
+    exchange: str
+    quote_currency: str
+    category: str
+    search_aliases: str = ''
+    is_active: bool = True
+    capabilities: InstrumentCapabilitiesResponse
+    runtime: InstrumentRuntimeResponse | None = None
+    last_price: float | None = None
+    change_rate: float | None = None
+    updated_at: str | None = None
+
+
 class CandleResponse(BaseModel):
     id: int
     symbol: str
@@ -109,6 +143,9 @@ class SignalResponse(BaseModel):
     score: float
     reason: str
     price: float
+    notification_delivery: str = 'pending'
+    notification_delivery_reason: str | None = None
+    notification_count: int = 0
     created_at: str
 
 
@@ -171,6 +208,10 @@ class OverviewResponse(BaseModel):
     name: str
     price: float
     change_rate: float
+    data_mode: str | None = None
+    data_source: str | None = None
+    market_session: str | None = None
+    is_delayed: bool = False
     rsi14: float | None = None
     sma5: float | None = None
     sma20: float | None = None
@@ -178,6 +219,8 @@ class OverviewResponse(BaseModel):
     bollinger_lower: float | None = None
     recent_signal_type: str | None = None
     recent_signal_reason: str | None = None
+    profile_signal_type: str | None = None
+    profile_signal_reason: str | None = None
     in_watchlist: bool = False
 
 
@@ -213,6 +256,9 @@ class ClientEndpointsResponse(BaseModel):
     verify_email: str
     me: str
     overview: str
+    instrument_search: str
+    instrument_detail: str
+    signal_profile: str
     signals_recent: str
     watchlist: str
     notifications: str
@@ -225,6 +271,8 @@ class ClientFeaturesResponse(BaseModel):
     watchlist: bool
     notifications: bool
     strategies: bool
+    instrument_search: bool
+    signal_profiles: bool
     realtime_stream: bool
     web: bool
     app: bool
@@ -279,9 +327,50 @@ class SnapshotSummaryResponse(BaseModel):
     close_price: float | None = None
 
 
+class UserSignalProfileResponse(BaseModel):
+    id: int
+    user_name: str
+    symbol: str
+    is_enabled: bool
+    rsi_buy_threshold: float
+    rsi_sell_threshold: float
+    volume_multiplier: float
+    score_threshold: float
+    use_orderbook_pressure: bool
+    orderbook_bias_threshold: float
+    use_derivatives_confirm: bool
+    derivatives_bias_threshold: float
+    created_at: str
+    updated_at: str
+
+
+class UserSignalProfileUpdateRequest(BaseModel):
+    is_enabled: bool | None = None
+    rsi_buy_threshold: float | None = Field(default=None, ge=1, le=99)
+    rsi_sell_threshold: float | None = Field(default=None, ge=1, le=99)
+    volume_multiplier: float | None = Field(default=None, ge=1.0, le=10.0)
+    score_threshold: float | None = Field(default=None, ge=1.0, le=100.0)
+    use_orderbook_pressure: bool | None = None
+    orderbook_bias_threshold: float | None = Field(default=None, ge=0.1, le=10.0)
+    use_derivatives_confirm: bool | None = None
+    derivatives_bias_threshold: float | None = Field(default=None, ge=0.1, le=10.0)
+
+
+class ProfileEvaluationResponse(BaseModel):
+    status: Literal['BUY', 'SELL', 'WATCH', 'DISABLED', 'UNAVAILABLE']
+    score: float
+    reason: str
+    blockers: list[str] = []
+
+
 class ClientAssetDetailResponse(BaseModel):
     asset: AssetResponse
+    instrument: InstrumentResponse | None = None
     interval_type: str | None = None
+    requested_interval_type: str | None = None
+    interval_fallback_applied: bool = False
     candles: list[CandleResponse]
     signals: list[SignalResponse]
+    user_signal_profile: UserSignalProfileResponse | None = None
+    profile_evaluation: ProfileEvaluationResponse | None = None
     snapshot: SnapshotSummaryResponse | None = None

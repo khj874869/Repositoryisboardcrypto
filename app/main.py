@@ -36,7 +36,10 @@ from .schemas import (
     ClientBootstrapResponse,
     ClientDashboardResponse,
     EmailRequest,
+    InstrumentResponse,
     NotificationSettingsUpdateRequest,
+    UserSignalProfileResponse,
+    UserSignalProfileUpdateRequest,
     PasswordResetConfirmRequest,
     RefreshSessionResponse,
     RefreshTokenRequest,
@@ -233,6 +236,10 @@ def client_dashboard(
     current_user: dict | None = Depends(auth.get_optional_user),
     signal_limit: int = 12,
     notification_limit: int = 10,
+    signal_delivery: str | None = None,
+    signal_data_mode: str | None = None,
+    include_suppressed: bool = True,
+    signal_audit_only: bool = False,
 ):
     return client_api.build_dashboard_payload(
         current_user,
@@ -240,19 +247,27 @@ def client_dashboard(
         interval_type=_active_interval_type(),
         signal_limit=signal_limit,
         notification_limit=notification_limit,
+        signal_delivery=signal_delivery,
+        signal_data_mode=signal_data_mode,
+        include_suppressed=include_suppressed,
+        signal_audit_only=signal_audit_only,
     )
 
 
 @app.get('/api/client/assets/{symbol}', response_model=ClientAssetDetailResponse)
 def client_asset_detail(
     symbol: str,
+    current_user: dict | None = Depends(auth.get_optional_user),
     interval_type: str | None = None,
     candle_limit: int = 60,
     signal_limit: int = 20,
 ):
+    active_interval_type = _active_interval_type()
     detail = client_api.build_asset_detail_payload(
         symbol,
-        interval_type=interval_type or _active_interval_type(),
+        current_user=current_user,
+        requested_interval_type=interval_type,
+        fallback_interval_type=client_api.default_interval_type_for_symbol(symbol, active_interval_type),
         candle_limit=candle_limit,
         signal_limit=signal_limit,
     )
@@ -363,30 +378,33 @@ def list_assets():
     return db.fetch_all('SELECT * FROM assets ORDER BY symbol ASC')
 
 
+@app.get('/api/instruments/search', response_model=list[InstrumentResponse])
+def search_instruments(q: str = '', market_type: str | None = None, limit: int = 20):
+    return [client_api.format_instrument_payload(row) for row in db.search_instruments(q, market_type=market_type, limit=limit)]
+
+
+@app.get('/api/instruments/{symbol}', response_model=InstrumentResponse)
+def get_instrument(symbol: str):
+    instrument = db.get_instrument(symbol)
+    if instrument is None:
+        raise HTTPException(status_code=404, detail='Instrument not found')
+    asset = db.fetch_one('SELECT last_price, change_rate, updated_at FROM assets WHERE symbol = ?', (symbol,))
+    payload = dict(instrument)
+    if asset:
+        payload.update(asset)
+    return client_api.format_instrument_payload(payload)
+
+
 @app.get('/api/assets/{symbol}/candles')
 def get_candles(symbol: str, limit: int = 50, interval_type: str | None = None):
-    effective_interval = interval_type or _active_interval_type()
-    if effective_interval:
-        return db.fetch_all(
-            '''
-            SELECT *
-            FROM candles
-            WHERE symbol = ? AND interval_type = ?
-            ORDER BY candle_time DESC
-            LIMIT ?
-            ''',
-            (symbol, effective_interval, limit),
-        )
-    return db.fetch_all(
-        '''
-        SELECT *
-        FROM candles
-        WHERE symbol = ?
-        ORDER BY candle_time DESC
-        LIMIT ?
-        ''',
-        (symbol, limit),
+    active_interval_type = _active_interval_type()
+    candle_result = client_api.resolve_recent_candles(
+        symbol,
+        limit,
+        requested_interval_type=interval_type,
+        fallback_interval_type=client_api.default_interval_type_for_symbol(symbol, active_interval_type),
     )
+    return list(reversed(candle_result['candles']))
 
 
 @app.get('/api/assets/{symbol}/signals')
@@ -404,8 +422,20 @@ def get_signals(symbol: str, limit: int = 30):
 
 
 @app.get('/api/signals/recent')
-def recent_signals(limit: int = 30):
-    return db.fetch_all('SELECT * FROM signals ORDER BY created_at DESC LIMIT ?', (limit,))
+def recent_signals(
+    limit: int = 30,
+    signal_delivery: str | None = None,
+    signal_data_mode: str | None = None,
+    include_suppressed: bool = True,
+    signal_audit_only: bool = False,
+):
+    return client_api.build_signal_feed(
+        limit,
+        notification_delivery=signal_delivery,
+        data_mode=signal_data_mode,
+        include_suppressed=include_suppressed,
+        audit_only=signal_audit_only,
+    )
 
 
 @app.get('/api/strategies')
@@ -452,8 +482,8 @@ def list_watchlist(current_user: dict = Depends(auth.get_current_user)):
 
 @app.post('/api/watchlist', status_code=201)
 def add_watchlist(payload: WatchlistCreateRequest, current_user: dict = Depends(auth.get_current_user)):
-    asset = db.fetch_one('SELECT symbol FROM assets WHERE symbol = ?', (payload.symbol,))
-    if not asset:
+    instrument = db.get_instrument(payload.symbol)
+    if not instrument:
         raise HTTPException(status_code=404, detail='Unknown symbol')
     db.add_watchlist_item(current_user['username'], payload.symbol)
     return {'message': 'watchlist_added'}
@@ -486,6 +516,38 @@ def read_notification(notification_id: int, current_user: dict = Depends(auth.ge
 @app.get('/api/notification-settings')
 def get_notification_settings(current_user: dict = Depends(auth.get_current_user)):
     return db.get_notification_settings(current_user['username'])
+
+
+@app.get('/api/signal-profiles/{symbol}', response_model=UserSignalProfileResponse)
+def get_signal_profile(symbol: str, current_user: dict = Depends(auth.get_current_user)):
+    instrument = db.get_instrument(symbol)
+    if not instrument:
+        raise HTTPException(status_code=404, detail='Unknown symbol')
+    return db.get_user_signal_profile(current_user['username'], symbol)
+
+
+@app.patch('/api/signal-profiles/{symbol}', response_model=UserSignalProfileResponse)
+def patch_signal_profile(
+    symbol: str,
+    payload: UserSignalProfileUpdateRequest,
+    current_user: dict = Depends(auth.get_current_user),
+):
+    instrument = db.get_instrument(symbol)
+    if not instrument:
+        raise HTTPException(status_code=404, detail='Unknown symbol')
+    return db.update_user_signal_profile(
+        current_user['username'],
+        symbol,
+        is_enabled=payload.is_enabled,
+        rsi_buy_threshold=payload.rsi_buy_threshold,
+        rsi_sell_threshold=payload.rsi_sell_threshold,
+        volume_multiplier=payload.volume_multiplier,
+        score_threshold=payload.score_threshold,
+        use_orderbook_pressure=payload.use_orderbook_pressure,
+        orderbook_bias_threshold=payload.orderbook_bias_threshold,
+        use_derivatives_confirm=payload.use_derivatives_confirm,
+        derivatives_bias_threshold=payload.derivatives_bias_threshold,
+    )
 
 
 @app.patch('/api/notification-settings')

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+import math
 from pathlib import Path
+import random
 from typing import Any, Iterator
 
 from sqlalchemy import (
@@ -29,6 +31,123 @@ from sqlalchemy.engine import Connection, Engine, make_url
 from .config import DATABASE_URL, DB_PATH, DEMO_EMAIL, DEMO_PASSWORD, DEMO_USER, ENABLE_DEMO_SEED, MARKETS
 
 UTC = timezone.utc
+DISCOVERABLE_SCANNER_INTERVAL = 'scanner-1d'
+DISCOVERABLE_SCANNER_CANDLES = 60
+
+DISCOVERABLE_STOCKS = {
+    'AAPL': {
+        'name': 'Apple',
+        'market_type': 'STOCK',
+        'exchange': 'NASDAQ',
+        'quote_currency': 'USD',
+        'category': 'Large Cap Tech',
+        'search_aliases': 'iphone ios big tech',
+        'has_realtime_feed': 0,
+        'has_volume_feed': 1,
+        'has_orderbook_feed': 0,
+        'has_derivatives_feed': 0,
+        'supports_indicator_profiles': 1,
+        'base_price': 205.0,
+        'volatility': 0.022,
+        'volume_base': 58_000_000.0,
+    },
+    'MSFT': {
+        'name': 'Microsoft',
+        'market_type': 'STOCK',
+        'exchange': 'NASDAQ',
+        'quote_currency': 'USD',
+        'category': 'Large Cap Tech',
+        'search_aliases': 'windows azure enterprise',
+        'has_realtime_feed': 0,
+        'has_volume_feed': 1,
+        'has_orderbook_feed': 0,
+        'has_derivatives_feed': 0,
+        'supports_indicator_profiles': 1,
+        'base_price': 428.0,
+        'volatility': 0.017,
+        'volume_base': 24_000_000.0,
+    },
+    'NVDA': {
+        'name': 'NVIDIA',
+        'market_type': 'STOCK',
+        'exchange': 'NASDAQ',
+        'quote_currency': 'USD',
+        'category': 'Semiconductor',
+        'search_aliases': 'gpu ai semiconductor',
+        'has_realtime_feed': 0,
+        'has_volume_feed': 1,
+        'has_orderbook_feed': 0,
+        'has_derivatives_feed': 0,
+        'supports_indicator_profiles': 1,
+        'base_price': 124.0,
+        'volatility': 0.031,
+        'volume_base': 46_000_000.0,
+    },
+    'TSLA': {
+        'name': 'Tesla',
+        'market_type': 'STOCK',
+        'exchange': 'NASDAQ',
+        'quote_currency': 'USD',
+        'category': 'Auto',
+        'search_aliases': 'ev electric vehicle',
+        'has_realtime_feed': 0,
+        'has_volume_feed': 1,
+        'has_orderbook_feed': 0,
+        'has_derivatives_feed': 0,
+        'supports_indicator_profiles': 1,
+        'base_price': 182.0,
+        'volatility': 0.036,
+        'volume_base': 96_000_000.0,
+    },
+    'SPY': {
+        'name': 'SPDR S&P 500 ETF',
+        'market_type': 'ETF',
+        'exchange': 'NYSEARCA',
+        'quote_currency': 'USD',
+        'category': 'Index ETF',
+        'search_aliases': 's&p 500 etf index',
+        'has_realtime_feed': 0,
+        'has_volume_feed': 1,
+        'has_orderbook_feed': 0,
+        'has_derivatives_feed': 0,
+        'supports_indicator_profiles': 1,
+        'base_price': 562.0,
+        'volatility': 0.011,
+        'volume_base': 72_000_000.0,
+    },
+    'QQQ': {
+        'name': 'Invesco QQQ Trust',
+        'market_type': 'ETF',
+        'exchange': 'NASDAQ',
+        'quote_currency': 'USD',
+        'category': 'Index ETF',
+        'search_aliases': 'nasdaq 100 etf index',
+        'has_realtime_feed': 0,
+        'has_volume_feed': 1,
+        'has_orderbook_feed': 0,
+        'has_derivatives_feed': 0,
+        'supports_indicator_profiles': 1,
+        'base_price': 486.0,
+        'volatility': 0.013,
+        'volume_base': 41_000_000.0,
+    },
+    '005930.KS': {
+        'name': 'Samsung Electronics',
+        'market_type': 'STOCK',
+        'exchange': 'KRX',
+        'quote_currency': 'KRW',
+        'category': 'Korea Large Cap',
+        'search_aliases': 'samsung semiconductors korea',
+        'has_realtime_feed': 0,
+        'has_volume_feed': 1,
+        'has_orderbook_feed': 0,
+        'has_derivatives_feed': 0,
+        'supports_indicator_profiles': 1,
+        'base_price': 83_500.0,
+        'volatility': 0.018,
+        'volume_base': 19_000_000.0,
+    },
+}
 
 metadata = MetaData()
 
@@ -40,6 +159,39 @@ assets = Table(
     Column('market_type', String(50), nullable=False),
     Column('last_price', Float, nullable=False),
     Column('change_rate', Float, nullable=False, server_default='0'),
+    Column('updated_at', String(64), nullable=False),
+)
+
+instruments = Table(
+    'instruments',
+    metadata,
+    Column('symbol', String(50), primary_key=True),
+    Column('name', String(255), nullable=False),
+    Column('market_type', String(50), nullable=False),
+    Column('exchange', String(64), nullable=False),
+    Column('quote_currency', String(16), nullable=False),
+    Column('category', String(64), nullable=False),
+    Column('search_aliases', Text, nullable=False, server_default=''),
+    Column('has_realtime_feed', Integer, nullable=False, server_default='0'),
+    Column('has_volume_feed', Integer, nullable=False, server_default='0'),
+    Column('has_orderbook_feed', Integer, nullable=False, server_default='0'),
+    Column('has_derivatives_feed', Integer, nullable=False, server_default='0'),
+    Column('supports_indicator_profiles', Integer, nullable=False, server_default='1'),
+    Column('is_active', Integer, nullable=False, server_default='1'),
+    Column('created_at', String(64), nullable=False),
+    Column('updated_at', String(64), nullable=False),
+)
+
+instrument_runtime_state = Table(
+    'instrument_runtime_state',
+    metadata,
+    Column('symbol', String(50), primary_key=True),
+    Column('data_mode', String(32), nullable=False),
+    Column('data_source', String(64), nullable=False),
+    Column('interval_type', String(32), nullable=False),
+    Column('market_session', String(32), nullable=False),
+    Column('is_delayed', Integer, nullable=False, server_default='0'),
+    Column('as_of', String(64), nullable=False),
     Column('updated_at', String(64), nullable=False),
 )
 
@@ -82,6 +234,9 @@ signals = Table(
     Column('score', Float, nullable=False),
     Column('reason', Text, nullable=False),
     Column('price', Float, nullable=False),
+    Column('notification_delivery', String(32), nullable=False, server_default='pending'),
+    Column('notification_delivery_reason', String(128)),
+    Column('notification_count', Integer, nullable=False, server_default='0'),
     Column('created_at', String(64), nullable=False),
 )
 
@@ -153,6 +308,26 @@ notifications = Table(
     Column('read_at', String(64)),
     Column('created_at', String(64), nullable=False),
     UniqueConstraint('user_name', 'signal_id', name='uq_notifications_user_signal'),
+)
+
+user_signal_profiles = Table(
+    'user_signal_profiles',
+    metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('user_name', String(64), nullable=False),
+    Column('symbol', String(50), nullable=False),
+    Column('is_enabled', Integer, nullable=False, server_default='1'),
+    Column('rsi_buy_threshold', Float, nullable=False, server_default='35'),
+    Column('rsi_sell_threshold', Float, nullable=False, server_default='68'),
+    Column('volume_multiplier', Float, nullable=False, server_default='1.3'),
+    Column('score_threshold', Float, nullable=False, server_default='70'),
+    Column('use_orderbook_pressure', Integer, nullable=False, server_default='0'),
+    Column('orderbook_bias_threshold', Float, nullable=False, server_default='1.5'),
+    Column('use_derivatives_confirm', Integer, nullable=False, server_default='0'),
+    Column('derivatives_bias_threshold', Float, nullable=False, server_default='1.0'),
+    Column('created_at', String(64), nullable=False),
+    Column('updated_at', String(64), nullable=False),
+    UniqueConstraint('user_name', 'symbol', name='uq_user_signal_profiles_user_symbol'),
 )
 
 _ENGINE: Engine | None = None
@@ -261,12 +436,117 @@ def init_db() -> None:
             conn.exec_driver_sql('PRAGMA foreign_keys=ON')
             conn.exec_driver_sql('PRAGMA journal_mode=WAL')
         metadata.create_all(conn)
+        seed_instruments(conn)
         seed_assets(conn)
+        seed_discoverable_scanner_data(conn)
         seed_strategies(conn)
         if ENABLE_DEMO_SEED:
             seed_demo_user(conn)
             seed_watchlist(conn)
             ensure_notification_settings(conn, DEMO_USER)
+
+
+def _discoverable_instruments() -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    for symbol, meta in MARKETS.items():
+        rows[symbol] = {
+            'name': meta['name'],
+            'market_type': meta['market_type'],
+            'exchange': 'UPBIT',
+            'quote_currency': symbol.split('-', 1)[0] if '-' in symbol else 'KRW',
+            'category': 'Crypto Spot',
+            'search_aliases': f"{meta['name']} crypto coin upbit {symbol}",
+            'has_realtime_feed': 1,
+            'has_volume_feed': 1,
+            'has_orderbook_feed': 0,
+            'has_derivatives_feed': 0,
+            'supports_indicator_profiles': 1,
+        }
+    rows.update(DISCOVERABLE_STOCKS)
+    return rows
+
+
+def seed_instruments(conn: Connection) -> None:
+    now = isoformat(utc_now())
+    for symbol, meta in _discoverable_instruments().items():
+        values = {
+            'symbol': symbol,
+            'name': meta['name'],
+            'market_type': meta['market_type'],
+            'exchange': meta['exchange'],
+            'quote_currency': meta['quote_currency'],
+            'category': meta['category'],
+            'search_aliases': meta.get('search_aliases', ''),
+            'has_realtime_feed': int(meta.get('has_realtime_feed', 0)),
+            'has_volume_feed': int(meta.get('has_volume_feed', 0)),
+            'has_orderbook_feed': int(meta.get('has_orderbook_feed', 0)),
+            'has_derivatives_feed': int(meta.get('has_derivatives_feed', 0)),
+            'supports_indicator_profiles': int(meta.get('supports_indicator_profiles', 1)),
+            'is_active': 1,
+            'created_at': now,
+            'updated_at': now,
+        }
+        stmt = _dialect_insert(conn, instruments, values).on_conflict_do_update(
+            index_elements=['symbol'],
+            set_={
+                'name': values['name'],
+                'market_type': values['market_type'],
+                'exchange': values['exchange'],
+                'quote_currency': values['quote_currency'],
+                'category': values['category'],
+                'search_aliases': values['search_aliases'],
+                'has_realtime_feed': values['has_realtime_feed'],
+                'has_volume_feed': values['has_volume_feed'],
+                'has_orderbook_feed': values['has_orderbook_feed'],
+                'has_derivatives_feed': values['has_derivatives_feed'],
+                'supports_indicator_profiles': values['supports_indicator_profiles'],
+                'is_active': values['is_active'],
+                'updated_at': values['updated_at'],
+            },
+        )
+        conn.execute(stmt)
+
+
+def upsert_instrument_runtime_state(
+    symbol: str,
+    *,
+    data_mode: str,
+    data_source: str,
+    interval_type: str,
+    market_session: str,
+    is_delayed: bool,
+    as_of: str | None = None,
+    updated_at: str | None = None,
+) -> None:
+    effective_as_of = as_of or isoformat(utc_now())
+    effective_updated_at = updated_at or effective_as_of
+    with get_conn() as conn:
+        stmt = _dialect_insert(
+            conn,
+            instrument_runtime_state,
+            {
+                'symbol': symbol,
+                'data_mode': data_mode,
+                'data_source': data_source,
+                'interval_type': interval_type,
+                'market_session': market_session,
+                'is_delayed': int(is_delayed),
+                'as_of': effective_as_of,
+                'updated_at': effective_updated_at,
+            },
+        ).on_conflict_do_update(
+            index_elements=['symbol'],
+            set_={
+                'data_mode': data_mode,
+                'data_source': data_source,
+                'interval_type': interval_type,
+                'market_session': market_session,
+                'is_delayed': int(is_delayed),
+                'as_of': effective_as_of,
+                'updated_at': effective_updated_at,
+            },
+        )
+        conn.execute(stmt)
 
 
 def seed_assets(conn: Connection) -> None:
@@ -289,6 +569,118 @@ def seed_assets(conn: Connection) -> None:
             },
         )
         conn.execute(stmt)
+        state_stmt = _dialect_insert(
+            conn,
+            instrument_runtime_state,
+            {
+                'symbol': symbol,
+                'data_mode': 'realtime',
+                'data_source': 'bootstrap',
+                'interval_type': 'pending',
+                'market_session': 'continuous',
+                'is_delayed': 0,
+                'as_of': now,
+                'updated_at': now,
+            },
+        ).on_conflict_do_nothing(index_elements=['symbol'])
+        conn.execute(state_stmt)
+
+
+def _scanner_rows(symbol: str, meta: dict[str, Any]) -> list[dict[str, Any]]:
+    anchor = utc_now().astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    rng = random.Random(f"scanner:{symbol}")
+    last_close = float(meta['base_price'])
+    rows: list[dict[str, Any]] = []
+    for offset in range(DISCOVERABLE_SCANNER_CANDLES):
+        candle_dt = anchor - timedelta(days=DISCOVERABLE_SCANNER_CANDLES - offset - 1)
+        volatility = float(meta.get('volatility', 0.02))
+        volume_base = float(meta.get('volume_base', 1_000_000.0))
+        drift = ((offset % 10) - 4.5) * (volatility / 11)
+        close_move = drift + rng.uniform(-volatility, volatility) * 0.75
+        open_move = rng.uniform(-volatility, volatility) * 0.35
+        open_price = max(0.01, last_close * (1 + open_move))
+        close_price = max(0.01, last_close * (1 + close_move))
+        wick_up = max(volatility * 0.7, 0.004) * rng.uniform(0.25, 1.0)
+        wick_down = max(volatility * 0.7, 0.004) * rng.uniform(0.25, 1.0)
+        high_price = max(open_price, close_price) * (1 + wick_up)
+        low_price = min(open_price, close_price) * max(0.2, 1 - wick_down)
+        volume = max(1.0, volume_base * (1 + rng.uniform(-0.45, 0.75)))
+        rows.append(
+            {
+                'symbol': symbol,
+                'candle_time': isoformat(candle_dt),
+                'interval_type': DISCOVERABLE_SCANNER_INTERVAL,
+                'open_price': round(open_price, 4),
+                'high_price': round(high_price, 4),
+                'low_price': round(low_price, 4),
+                'close_price': round(close_price, 4),
+                'volume': round(volume, 4),
+            }
+        )
+        last_close = close_price
+    return rows
+
+
+def seed_discoverable_scanner_data(conn: Connection) -> None:
+    now = isoformat(utc_now())
+    for symbol, meta in DISCOVERABLE_STOCKS.items():
+        rows = _scanner_rows(symbol, meta)
+        previous_close = rows[-2]['close_price']
+        latest = rows[-1]
+        change_rate = 0.0
+        if previous_close:
+            change_rate = ((latest['close_price'] - previous_close) / previous_close) * 100
+
+        asset_stmt = _dialect_insert(
+            conn,
+            assets,
+            {
+                'symbol': symbol,
+                'name': meta['name'],
+                'market_type': meta['market_type'],
+                'last_price': latest['close_price'],
+                'change_rate': change_rate,
+                'updated_at': now,
+            },
+        ).on_conflict_do_update(
+            index_elements=['symbol'],
+            set_={
+                'name': meta['name'],
+                'market_type': meta['market_type'],
+                'last_price': latest['close_price'],
+                'change_rate': change_rate,
+                'updated_at': now,
+            },
+        )
+        conn.execute(asset_stmt)
+        state_stmt = _dialect_insert(
+            conn,
+            instrument_runtime_state,
+            {
+                'symbol': symbol,
+                'data_mode': 'scanner',
+                'data_source': 'synthetic',
+                'interval_type': DISCOVERABLE_SCANNER_INTERVAL,
+                'market_session': 'synthetic',
+                'is_delayed': 0,
+                'as_of': latest['candle_time'],
+                'updated_at': now,
+            },
+        ).on_conflict_do_nothing(index_elements=['symbol'])
+        conn.execute(state_stmt)
+
+        for row in rows:
+            stmt = _dialect_insert(conn, candles, row).on_conflict_do_update(
+                index_elements=['symbol', 'candle_time', 'interval_type'],
+                set_={
+                    'open_price': row['open_price'],
+                    'high_price': row['high_price'],
+                    'low_price': row['low_price'],
+                    'close_price': row['close_price'],
+                    'volume': row['volume'],
+                },
+            )
+            conn.execute(stmt)
 
 
 def seed_strategies(conn: Connection) -> None:
@@ -353,8 +745,8 @@ def seed_demo_user(conn: Connection) -> None:
 
 def seed_watchlist(conn: Connection) -> None:
     now = isoformat(utc_now())
-    for symbol in ('KRW-BTC', 'KRW-ETH'):
-        if symbol not in MARKETS:
+    for symbol in ('KRW-BTC', 'KRW-ETH', 'AAPL'):
+        if symbol not in _discoverable_instruments():
             continue
         stmt = _dialect_insert(
             conn,
@@ -662,15 +1054,117 @@ def update_notification_settings(
             },
         )
         conn.execute(stmt)
+
+
+def list_scanner_instruments() -> list[dict[str, Any]]:
+    rows = fetch_all(
+        '''
+        SELECT symbol, name, market_type, exchange, quote_currency, category
+        FROM instruments
+        WHERE is_active = 1
+          AND has_realtime_feed = 0
+        ORDER BY market_type ASC, symbol ASC
+        '''
+    )
+    return rows
+
+
+def refresh_scanner_market_data(now: datetime | None = None) -> list[dict[str, Any]]:
+    effective_now = (now or utc_now()).astimezone(UTC)
+    bucket = effective_now.replace(second=0, microsecond=0)
+    candle_time = effective_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_progress = ((bucket.hour * 3600) + (bucket.minute * 60) + bucket.second) / 86400
+    updates: list[dict[str, Any]] = []
+
+    for symbol, meta in DISCOVERABLE_STOCKS.items():
+        recent = fetch_recent_candles(symbol, 3, interval_type=DISCOVERABLE_SCANNER_INTERVAL)
+        if not recent:
+            continue
+
+        latest = recent[-1]
+        latest_time = datetime.fromisoformat(latest['candle_time']).astimezone(UTC)
+        if latest_time == candle_time and len(recent) >= 2:
+            previous_close = float(recent[-2]['close_price'])
+        else:
+            previous_close = float(latest['close_price'])
+
+        volatility = float(meta.get('volatility', 0.02))
+        volume_base = float(meta.get('volume_base', 1_000_000.0))
+        rng = random.Random(f"scanner-refresh:{symbol}:{bucket.isoformat()}")
+        drift_wave = math.sin(day_progress * math.tau * 2.2) * volatility * 0.55
+        close_move = drift_wave + rng.uniform(-volatility, volatility) * 0.28
+        open_move = rng.uniform(-volatility, volatility) * 0.08
+
+        open_price = max(0.01, previous_close * (1 + open_move))
+        close_price = max(0.01, previous_close * (1 + close_move))
+        wick_up = max(volatility * 0.55, 0.004) * (0.35 + rng.random() * 0.8)
+        wick_down = max(volatility * 0.55, 0.004) * (0.35 + rng.random() * 0.8)
+        high_price = max(open_price, close_price) * (1 + wick_up)
+        low_price = min(open_price, close_price) * max(0.2, 1 - wick_down)
+        volume = max(1.0, volume_base * (0.55 + day_progress * 0.9 + rng.uniform(-0.12, 0.2)))
+        change_rate = ((close_price - previous_close) / previous_close) * 100 if previous_close else 0.0
+
+        upsert_candle(
+            symbol=symbol,
+            candle_time=isoformat(candle_time),
+            interval_type=DISCOVERABLE_SCANNER_INTERVAL,
+            open_price=round(open_price, 4),
+            high_price=round(high_price, 4),
+            low_price=round(low_price, 4),
+            close_price=round(close_price, 4),
+            volume=round(volume, 4),
+        )
+        update_asset_price(
+            symbol,
+            last_price=round(close_price, 4),
+            change_rate=round(change_rate, 4),
+            updated_at=isoformat(bucket),
+        )
+        upsert_instrument_runtime_state(
+            symbol,
+            data_mode='scanner',
+            data_source='synthetic',
+            interval_type=DISCOVERABLE_SCANNER_INTERVAL,
+            market_session='synthetic',
+            is_delayed=False,
+            as_of=isoformat(candle_time),
+            updated_at=isoformat(bucket),
+        )
+        updates.append(
+            {
+                'symbol': symbol,
+                'price': round(close_price, 4),
+                'change_rate': round(change_rate, 4),
+                'candle_time': isoformat(candle_time),
+                'updated_at': isoformat(bucket),
+                'interval_type': DISCOVERABLE_SCANNER_INTERVAL,
+                'source': 'scanner',
+                'data_mode': 'scanner',
+                'data_source': 'synthetic',
+                'market_session': 'synthetic',
+                'is_delayed': False,
+            }
+        )
+    return updates
     return get_notification_settings(user_name)
 
 
 def get_watchlist_for_user(user_name: str) -> list[dict[str, Any]]:
     return fetch_all(
         '''
-        SELECT w.id, w.user_name, w.symbol, w.created_at, a.last_price, a.change_rate
+        SELECT w.id,
+               w.user_name,
+               w.symbol,
+               w.created_at,
+               i.name,
+               i.market_type,
+               i.exchange,
+               i.has_realtime_feed,
+               a.last_price,
+               a.change_rate
         FROM watchlists w
-        JOIN assets a ON a.symbol = w.symbol
+        LEFT JOIN instruments i ON i.symbol = w.symbol
+        LEFT JOIN assets a ON a.symbol = w.symbol
         WHERE w.user_name = ?
         ORDER BY w.created_at DESC
         ''',
@@ -690,6 +1184,203 @@ def add_watchlist_item(user_name: str, symbol: str) -> None:
             },
         ).on_conflict_do_nothing(index_elements=['user_name', 'symbol'])
         conn.execute(stmt)
+
+
+def get_instrument(symbol: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute(select(instruments).where(instruments.c.symbol == symbol)).mappings().first()
+    if not row:
+        return None
+    payload = dict(row)
+    payload['has_realtime_feed'] = bool(payload['has_realtime_feed'])
+    payload['has_volume_feed'] = bool(payload['has_volume_feed'])
+    payload['has_orderbook_feed'] = bool(payload['has_orderbook_feed'])
+    payload['has_derivatives_feed'] = bool(payload['has_derivatives_feed'])
+    payload['supports_indicator_profiles'] = bool(payload['supports_indicator_profiles'])
+    payload['is_active'] = bool(payload['is_active'])
+    return payload
+
+
+def get_instrument_runtime_state(symbol: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            select(instrument_runtime_state).where(instrument_runtime_state.c.symbol == symbol)
+        ).mappings().first()
+    if not row:
+        return None
+    payload = dict(row)
+    payload['is_delayed'] = bool(payload['is_delayed'])
+    return payload
+
+
+def get_instrument_runtime_states(symbols: list[str]) -> dict[str, dict[str, Any]]:
+    if not symbols:
+        return {}
+    with get_conn() as conn:
+        rows = conn.execute(
+            select(instrument_runtime_state).where(instrument_runtime_state.c.symbol.in_(symbols))
+        ).mappings().all()
+    payload: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        item = dict(row)
+        item['is_delayed'] = bool(item['is_delayed'])
+        payload[item['symbol']] = item
+    return payload
+
+
+def search_instruments(query: str = '', *, market_type: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    normalized_query = f"%{query.strip().lower()}%" if query.strip() else '%'
+    rows = fetch_all(
+        '''
+        SELECT i.symbol,
+               i.name,
+               i.market_type,
+               i.exchange,
+               i.quote_currency,
+               i.category,
+               i.search_aliases,
+               i.has_realtime_feed,
+               i.has_volume_feed,
+               i.has_orderbook_feed,
+               i.has_derivatives_feed,
+               i.supports_indicator_profiles,
+               i.is_active,
+               a.last_price,
+               a.change_rate,
+               a.updated_at
+        FROM instruments i
+        LEFT JOIN assets a ON a.symbol = i.symbol
+        WHERE i.is_active = 1
+          AND (:market_type IS NULL OR i.market_type = :market_type)
+          AND (
+                lower(i.symbol) LIKE :query
+             OR lower(i.name) LIKE :query
+             OR lower(i.exchange) LIKE :query
+             OR lower(i.category) LIKE :query
+             OR lower(i.search_aliases) LIKE :query
+          )
+        ORDER BY i.has_realtime_feed DESC, i.market_type ASC, i.symbol ASC
+        LIMIT :limit
+        ''',
+        {
+            'query': normalized_query,
+            'market_type': market_type,
+            'limit': max(1, min(limit, 50)),
+        },
+    )
+    for row in rows:
+        row['has_realtime_feed'] = bool(row['has_realtime_feed'])
+        row['has_volume_feed'] = bool(row['has_volume_feed'])
+        row['has_orderbook_feed'] = bool(row['has_orderbook_feed'])
+        row['has_derivatives_feed'] = bool(row['has_derivatives_feed'])
+        row['supports_indicator_profiles'] = bool(row['supports_indicator_profiles'])
+        row['is_active'] = bool(row['is_active'])
+    return rows
+
+
+def _default_signal_profile(symbol: str) -> dict[str, Any]:
+    instrument = get_instrument(symbol)
+    orderbook_enabled = bool(instrument and instrument['has_orderbook_feed'])
+    derivatives_enabled = bool(instrument and instrument['has_derivatives_feed'])
+    return {
+        'is_enabled': 1,
+        'rsi_buy_threshold': 35.0,
+        'rsi_sell_threshold': 68.0,
+        'volume_multiplier': 1.3,
+        'score_threshold': 70.0,
+        'use_orderbook_pressure': int(orderbook_enabled),
+        'orderbook_bias_threshold': 1.5,
+        'use_derivatives_confirm': int(derivatives_enabled),
+        'derivatives_bias_threshold': 1.0,
+    }
+
+
+def ensure_user_signal_profile(conn: Connection | None, user_name: str, symbol: str) -> None:
+    now = isoformat(utc_now())
+    defaults = _default_signal_profile(symbol)
+    owns_connection = conn is None
+    if owns_connection:
+        conn_ctx = get_conn()
+        conn = conn_ctx.__enter__()
+    try:
+        stmt = _dialect_insert(
+            conn,
+            user_signal_profiles,
+            {
+                'user_name': user_name,
+                'symbol': symbol,
+                **defaults,
+                'created_at': now,
+                'updated_at': now,
+            },
+        ).on_conflict_do_nothing(index_elements=['user_name', 'symbol'])
+        conn.execute(stmt)
+    finally:
+        if owns_connection:
+            conn_ctx.__exit__(None, None, None)
+
+
+def get_user_signal_profile(user_name: str, symbol: str) -> dict[str, Any]:
+    ensure_user_signal_profile(None, user_name, symbol)
+    with get_conn() as conn:
+        row = conn.execute(
+            select(user_signal_profiles).where(
+                user_signal_profiles.c.user_name == user_name,
+                user_signal_profiles.c.symbol == symbol,
+            )
+        ).mappings().first()
+    assert row is not None
+    payload = dict(row)
+    payload['is_enabled'] = bool(payload['is_enabled'])
+    payload['use_orderbook_pressure'] = bool(payload['use_orderbook_pressure'])
+    payload['use_derivatives_confirm'] = bool(payload['use_derivatives_confirm'])
+    return payload
+
+
+def update_user_signal_profile(
+    user_name: str,
+    symbol: str,
+    *,
+    is_enabled: bool | None = None,
+    rsi_buy_threshold: float | None = None,
+    rsi_sell_threshold: float | None = None,
+    volume_multiplier: float | None = None,
+    score_threshold: float | None = None,
+    use_orderbook_pressure: bool | None = None,
+    orderbook_bias_threshold: float | None = None,
+    use_derivatives_confirm: bool | None = None,
+    derivatives_bias_threshold: float | None = None,
+) -> dict[str, Any]:
+    current = get_user_signal_profile(user_name, symbol)
+    next_values = {
+        'is_enabled': int(current['is_enabled'] if is_enabled is None else is_enabled),
+        'rsi_buy_threshold': current['rsi_buy_threshold'] if rsi_buy_threshold is None else rsi_buy_threshold,
+        'rsi_sell_threshold': current['rsi_sell_threshold'] if rsi_sell_threshold is None else rsi_sell_threshold,
+        'volume_multiplier': current['volume_multiplier'] if volume_multiplier is None else volume_multiplier,
+        'score_threshold': current['score_threshold'] if score_threshold is None else score_threshold,
+        'use_orderbook_pressure': int(current['use_orderbook_pressure'] if use_orderbook_pressure is None else use_orderbook_pressure),
+        'orderbook_bias_threshold': current['orderbook_bias_threshold'] if orderbook_bias_threshold is None else orderbook_bias_threshold,
+        'use_derivatives_confirm': int(current['use_derivatives_confirm'] if use_derivatives_confirm is None else use_derivatives_confirm),
+        'derivatives_bias_threshold': current['derivatives_bias_threshold'] if derivatives_bias_threshold is None else derivatives_bias_threshold,
+        'updated_at': isoformat(utc_now()),
+    }
+    with get_conn() as conn:
+        stmt = _dialect_insert(
+            conn,
+            user_signal_profiles,
+            {
+                'user_name': user_name,
+                'symbol': symbol,
+                **_default_signal_profile(symbol),
+                'created_at': isoformat(utc_now()),
+                **next_values,
+            },
+        ).on_conflict_do_update(
+            index_elements=['user_name', 'symbol'],
+            set_=next_values,
+        )
+        conn.execute(stmt)
+    return get_user_signal_profile(user_name, symbol)
 
 
 def delete_watchlist_item(user_name: str, symbol: str) -> None:
@@ -741,10 +1432,11 @@ def update_asset_price(
 ) -> None:
     row = fetch_one('SELECT symbol, name, market_type, change_rate FROM assets WHERE symbol = ?', (symbol,))
     if row is None:
+        instrument = get_instrument(symbol)
         upsert_asset(
             symbol=symbol,
-            name=symbol,
-            market_type='COIN',
+            name=instrument['name'] if instrument else symbol,
+            market_type=instrument['market_type'] if instrument else 'COIN',
             last_price=last_price,
             change_rate=change_rate or 0.0,
             updated_at=updated_at,
@@ -869,6 +1561,27 @@ def insert_signal_if_new(
         )
         signal_id = result.inserted_primary_key[0]
     return fetch_one('SELECT * FROM signals WHERE id = ?', (signal_id,))
+
+
+def update_signal_delivery(
+    signal_id: int,
+    *,
+    notification_delivery: str,
+    notification_delivery_reason: str | None,
+    notification_count: int,
+) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        conn.execute(
+            signals.update()
+            .where(signals.c.id == signal_id)
+            .values(
+                notification_delivery=notification_delivery,
+                notification_delivery_reason=notification_delivery_reason,
+                notification_count=notification_count,
+            )
+        )
+        row = conn.execute(select(signals).where(signals.c.id == signal_id)).mappings().first()
+    return dict(row) if row else None
 
 
 def create_notifications_for_signal(signal_id: int, symbol: str) -> int:

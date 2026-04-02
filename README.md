@@ -21,6 +21,8 @@ These endpoints give web and app clients the same startup metadata, dashboard pa
 - Upbit REST bootstrap for recent candles
 - Upbit WebSocket ticker and candle streaming
 - automatic fallback to simulator mode if Upbit startup fails
+- scanner runtime for watch-only stocks and ETFs
+- pluggable scanner providers with synthetic default and Yahoo adapter support
 - access plus refresh token auth with session rotation, password reset, and email verification foundations
 - per-user watchlist and notification settings
 - notification inbox with read state
@@ -139,6 +141,14 @@ Returns:
 - `SIGNAL_FLOW_UPBIT_INTERVAL=1s|1m|3m|5m|10m|15m|30m|60m|240m`
 - `SIGNAL_FLOW_UPBIT_BOOTSTRAP_COUNT=120`
 - `SIGNAL_FLOW_SOURCE_FALLBACK_TO_SIMULATOR=true`
+- `SIGNAL_FLOW_SCANNER_PROVIDER=synthetic|yahoo`
+- `SIGNAL_FLOW_SCANNER_PROVIDER_FALLBACK_TO_SYNTHETIC=true`
+- `SIGNAL_FLOW_SCANNER_REFRESH_SECONDS=20`
+- `SIGNAL_FLOW_SCANNER_YAHOO_BASE_URL=https://query1.finance.yahoo.com`
+- `SIGNAL_FLOW_SCANNER_YAHOO_RANGE=3mo`
+- `SIGNAL_FLOW_SCANNER_YAHOO_TIMEOUT_SECONDS=10`
+- `SIGNAL_FLOW_SCANNER_ALERT_ALLOWED_SESSIONS=regular`
+- `SIGNAL_FLOW_SCANNER_ALERT_ALLOW_DELAYED=false`
 - `SIGNAL_FLOW_REFRESH_TOKEN_EXPIRE_DAYS=30`
 - `SIGNAL_FLOW_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30`
 - `SIGNAL_FLOW_EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS=24`

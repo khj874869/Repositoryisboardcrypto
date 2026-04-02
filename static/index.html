@@ -4,149 +4,407 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Signal Flow Live</title>
-  <meta name="theme-color" content="#0f1b2d" />
+  <meta name="theme-color" content="#101412" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <style>
-    :root { --bg:#08111d; --panel:#0f1b2d; --line:#22344d; --text:#e8eef7; --muted:#9cafc7; --buy:#2dd4bf; --sell:#fb7185; --accent:#4f8cff; }
-    * { box-sizing:border-box; } body { margin:0; font-family:"Segoe UI",sans-serif; background:linear-gradient(180deg,#07111c,#0a1422); color:var(--text); }
-    main { width:min(1360px,calc(100% - 24px)); margin:16px auto 28px; display:grid; gap:16px; }
-    .panel { background:rgba(15,27,45,.9); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 16px 36px rgba(0,0,0,.24); }
-    .hero,.grid,.detail { display:grid; gap:16px; } .hero { grid-template-columns:1.3fr .9fr; } .grid { grid-template-columns:1fr 1.25fr; } .detail { grid-template-columns:1.15fr .85fr; }
-    h1,h2 { margin:0 0 8px; } p,.muted { color:var(--muted); } code { color:#c5d5ff; }
-    .stats,.cards,.summary,.forms,.diag { display:grid; gap:12px; } .stats,.cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .summary { grid-template-columns:repeat(5,minmax(0,1fr)); } .forms { grid-template-columns:repeat(2,minmax(0,1fr)); } .diag { grid-template-columns:repeat(3,minmax(0,1fr)); }
-    .card,.summary-item { background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:14px; padding:14px; }
-    .pill { display:inline-flex; padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.06); color:var(--muted); font-size:12px; }
-    .hero-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
-    .warning { margin-top:12px; padding:12px 14px; border-radius:14px; border:1px solid rgba(251,113,133,.35); background:rgba(251,113,133,.08); color:#fecdd3; display:none; }
-    .buy { color:var(--buy); font-weight:700; } .sell { color:var(--sell); font-weight:700; } .positive { color:var(--buy); } .negative { color:var(--sell); }
-    label { display:grid; gap:6px; color:var(--muted); font-size:13px; } input,select,button { width:100%; border-radius:12px; border:1px solid var(--line); background:#09111d; color:var(--text); padding:11px 12px; font:inherit; }
-    button { cursor:pointer; background:linear-gradient(135deg,rgba(79,140,255,.18),rgba(45,212,191,.16)); } button.secondary { background:rgba(255,255,255,.04); }
-    .actions { display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:10px; }
-    .checks { display:flex; gap:14px; flex-wrap:wrap; margin:10px 0; } .checks label { display:inline-flex; align-items:center; gap:8px; } .checks input { width:auto; margin:0; accent-color:var(--accent); }
-    .scroll { overflow:auto; border:1px solid var(--line); border-radius:14px; } table { width:100%; border-collapse:collapse; min-width:540px; } th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; font-size:13px; vertical-align:top; } th { color:#b5c8de; font-size:12px; text-transform:uppercase; letter-spacing:.08em; background:rgba(255,255,255,.03); } tr:last-child td { border-bottom:0; } tr.asset-row { cursor:pointer; } tr.asset-row:hover, tr.asset-row.selected { background:rgba(79,140,255,.09); }
-    @media (max-width:1100px) { .hero,.grid,.detail,.stats,.cards,.summary,.forms,.actions,.diag { grid-template-columns:1fr 1fr; } .hero,.grid,.detail { grid-template-columns:1fr; } }
-    @media (max-width:720px) { main { width:min(100% - 16px,100%); } .stats,.cards,.summary,.forms,.actions,.diag { grid-template-columns:1fr; } }
+    :root { --bg:#07100d; --panel:rgba(15,24,21,.88); --panel-strong:rgba(19,30,26,.96); --line:rgba(190,215,203,.12); --line-strong:rgba(190,215,203,.22); --text:#f5f5ef; --muted:#9fb2aa; --accent:#ff8f3d; --buy:#67f0b0; --sell:#ff7b7b; --gold:#ffd36c; --shadow:0 22px 54px rgba(0,0,0,.28); --radius:24px; --mono:"IBM Plex Mono","Cascadia Code","SFMono-Regular",Consolas,monospace; --sans:"Avenir Next","Segoe UI Variable","Segoe UI",sans-serif; }
+    * { box-sizing:border-box; } html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--text); font-family:var(--sans); background:radial-gradient(circle at top left,rgba(255,143,61,.18),transparent 32%),radial-gradient(circle at top right,rgba(103,240,176,.12),transparent 28%),linear-gradient(180deg,#08110e 0%,#050908 100%); min-height:100vh; }
+    body::before { content:""; position:fixed; inset:0; pointer-events:none; background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px); background-size:24px 24px; mask-image:linear-gradient(180deg,rgba(0,0,0,.28),transparent 85%); }
+    main { width:min(1440px,calc(100% - 24px)); margin:16px auto 36px; display:grid; gap:16px; position:relative; z-index:1; }
+    section,.panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); backdrop-filter:blur(18px); }
+    .panel { padding:20px; }
+    h1,h2,h3,p { margin:0; } code { font-family:var(--mono); color:#f6ddaa; }
+    .eyebrow,.pill,.signal-chip,.metric-pill { display:inline-flex; align-items:center; gap:8px; padding:7px 11px; border-radius:999px; font-size:12px; border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--muted); }
+    .eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:.16em; }
+    .eyebrow strong { color:var(--gold); }
+    .pill[data-tone="operator"], button[data-active="true"][data-tone="operator"] { color:var(--gold); border-color:rgba(255,211,108,.24); background:rgba(255,211,108,.1); }
+    .pill[data-tone="notified"], button[data-active="true"][data-tone="notified"] { color:var(--buy); border-color:rgba(103,240,176,.24); background:rgba(103,240,176,.1); }
+    .pill[data-tone="scanner"], button[data-active="true"][data-tone="scanner"] { color:#ffb071; border-color:rgba(255,143,61,.28); background:rgba(255,143,61,.12); }
+    .pill[data-tone="custom"], button[data-active="true"][data-tone="custom"] { color:#c8d2cd; border-color:rgba(200,210,205,.18); background:rgba(255,255,255,.05); }
+    .signal-chip.buy { color:var(--buy); border-color:rgba(103,240,176,.24); background:rgba(103,240,176,.1); }
+    .signal-chip.sell { color:var(--sell); border-color:rgba(255,123,123,.24); background:rgba(255,123,123,.1); }
+    .signal-chip.neutral { color:var(--gold); border-color:rgba(255,211,108,.24); background:rgba(255,211,108,.1); }
+    .positive,.buy { color:var(--buy); } .negative,.sell { color:var(--sell); } .muted,.mini-note { color:var(--muted); }
+    .mini-note { font-size:12px; line-height:1.5; }
+    .hero { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(360px,.9fr); gap:16px; padding:24px; overflow:hidden; position:relative; }
+    .hero::after { content:""; position:absolute; width:320px; height:320px; right:-40px; top:-40px; border-radius:50%; background:radial-gradient(circle,rgba(255,143,61,.16) 0%,transparent 70%); pointer-events:none; }
+    .hero-copy,.hero-spotlight,.stack,.board-shell,.spotlight,.insight-column { display:grid; gap:16px; align-content:start; }
+    h1 { max-width:11ch; font-size:clamp(2.5rem,5vw,5.2rem); line-height:.94; letter-spacing:-.05em; text-transform:uppercase; }
+    .hero-copy p { max-width:58ch; color:var(--muted); font-size:1rem; line-height:1.7; }
+    .hero-actions,.button-row,.metric-row,.checks { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .hero-strip,.summary-grid,.runtime-grid,.opportunity-grid,.forms,.actions { display:grid; gap:12px; }
+    .hero-strip,.summary-grid,.runtime-grid,.opportunity-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .summary-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .runtime-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .strip-card,.spotlight-card,.opportunity-card,.insight-card,.summary-item,.board-row,.feed-item { padding:16px; border-radius:20px; border:1px solid var(--line); background:rgba(255,255,255,.035); }
+    .spotlight-card { background:linear-gradient(180deg,rgba(255,143,61,.08),rgba(255,255,255,.02)),var(--panel-strong); }
+    .opportunity-card,.board-row { cursor:pointer; }
+    .opportunity-card.active,.board-row.active { border-color:rgba(255,143,61,.42); box-shadow:inset 0 0 0 1px rgba(255,143,61,.18); }
+    .kicker { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.12em; }
+    .big-number { font-size:clamp(1.6rem,2vw,2.2rem); letter-spacing:-.04em; margin-top:8px; }
+    .score-ring { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; font-size:18px; font-weight:700; color:var(--text); background:radial-gradient(circle at center,rgba(10,16,14,.95) 56%,transparent 57%),conic-gradient(var(--accent) var(--score-angle),rgba(255,255,255,.08) 0deg); border:1px solid var(--line); }
+    .score-ring[data-score="high"] { --accent:var(--buy); } .score-ring[data-score="mid"] { --accent:var(--gold); } .score-ring[data-score="low"] { --accent:#ff8f3d; }
+    .warning { display:none; padding:12px 14px; border-radius:16px; border:1px solid rgba(255,123,123,.28); background:rgba(255,123,123,.08); color:#ffd8d8; line-height:1.5; }
+    .warning.audit { border-color:rgba(255,211,108,.28); background:rgba(255,211,108,.08); color:#ffe9b5; }
+    .grid-2,.detail-grid,.board,.utility { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; }
+    .detail-grid { grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr); }
+    .chart-shell { background:var(--panel-strong); border:1px solid var(--line); border-radius:22px; padding:16px; display:grid; gap:14px; }
+    .chart-meta,.spotlight-head { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; }
+    .spotlight-head { align-items:end; }
+    .chart-box { width:100%; min-height:340px; border-radius:18px; border:1px solid var(--line); background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 35%),#0a1411; padding:8px; }
+    .chart-box svg { width:100%; height:100%; min-height:324px; display:block; }
+    label { display:grid; gap:6px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    button,input,select { width:100%; border-radius:14px; border:1px solid var(--line); background:rgba(10,16,14,.9); color:var(--text); padding:12px 14px; font:inherit; }
+    button { cursor:pointer; transition:transform 140ms ease,border-color 140ms ease,background 140ms ease; background:linear-gradient(135deg,rgba(255,143,61,.24),rgba(103,240,176,.18)); }
+    button:hover { transform:translateY(-1px); border-color:var(--line-strong); } button.secondary { background:rgba(255,255,255,.05); }
+    .checks label { display:inline-flex; align-items:center; gap:8px; font-size:13px; text-transform:none; letter-spacing:0; } .checks input { width:auto; margin:0; accent-color:#ff8f3d; }
+    .table-shell { overflow:auto; border-radius:18px; border:1px solid var(--line); }
+    table { width:100%; min-width:540px; border-collapse:collapse; }
+    th,td { text-align:left; padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
+    th { color:var(--muted); text-transform:uppercase; letter-spacing:.12em; font-size:11px; background:rgba(255,255,255,.03); }
+    tr:last-child td { border-bottom:0; }
+    .board-list,.feed,.finder-results,.profile-grid { display:grid; gap:10px; }
+    .board-row { display:grid; grid-template-columns:54px minmax(0,1fr) auto; gap:12px; align-items:center; }
+    .board-rank { width:40px; height:40px; display:grid; place-items:center; border-radius:14px; background:rgba(255,255,255,.05); font-family:var(--mono); color:var(--gold); }
+    .board-row small { color:var(--muted); display:block; margin-top:4px; line-height:1.45; }
+    .finder-row { padding:14px; border-radius:18px; border:1px solid var(--line); background:rgba(255,255,255,.03); cursor:pointer; display:grid; gap:8px; }
+    .finder-row.active { border-color:rgba(255,143,61,.42); background:rgba(255,143,61,.08); }
+    .finder-meta { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .profile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .profile-note { min-height:44px; padding:10px 12px; border-radius:14px; border:1px solid var(--line); background:rgba(255,255,255,.03); color:var(--muted); }
+    @media (max-width:1200px) { .hero,.grid-2,.detail-grid,.board,.utility { grid-template-columns:1fr; } .opportunity-grid,.summary-grid,.runtime-grid,.forms,.actions,.profile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:760px) { main { width:min(100% - 14px,100%); margin:10px auto 24px; } .hero,.panel,section { padding:18px; } .hero-strip,.opportunity-grid,.summary-grid,.runtime-grid,.forms,.actions,.profile-grid { grid-template-columns:1fr; } .board-row { grid-template-columns:46px minmax(0,1fr); } .board-row>:last-child { grid-column:2; } }
   </style>
 </head>
 <body>
   <main>
     <section class="hero">
-      <div class="panel">
-        <div class="pill">Shared Web/App Contract</div>
-        <h1>Signal Flow Live</h1>
-        <p>Web and mobile clients now share one bootstrap API, one dashboard aggregate API, and one asset detail API.</p>
+      <div class="hero-copy">
+        <div class="eyebrow"><strong>Live</strong> Signal desk for fast crypto decisions</div>
+        <div>
+          <h1>Signal Flow</h1>
+          <p>Stop staring at raw tables. This surface pulls the strongest setup to the top, overlays signals on price action, and keeps watchlist, alerts, and diagnostics in one live cockpit.</p>
+        </div>
         <div class="hero-actions">
-          <button id="install-button" type="button" class="secondary">Install App</button>
-          <div id="install-state" class="pill">Web mode</div>
+          <button id="install-button" type="button">Install App</button>
+          <div id="install-state" class="pill">Browser mode</div>
+          <div id="source-status" class="pill">Loading source</div>
+          <div id="socket-status" class="pill">Connecting</div>
         </div>
         <div id="runtime-warning" class="warning"></div>
+        <div class="hero-strip">
+          <div class="strip-card"><div class="kicker">Best Setup</div><div id="hero-best-symbol" class="big-number">-</div><div id="hero-best-note" class="mini-note">Scanning market pulse.</div></div>
+          <div class="strip-card"><div class="kicker">Unread Alerts</div><div id="unread-count" class="big-number">0</div><div id="hero-alert-note" class="mini-note">Waiting for signal pressure.</div></div>
+          <div class="strip-card"><div class="kicker">Live Feed</div><div id="last-message-at" class="big-number">-</div><div id="hero-feed-note" class="mini-note">Realtime stream health.</div><div id="hero-feed-preset" class="pill" style="margin-top:10px;">Tape preset</div></div>
+        </div>
       </div>
-      <div class="panel stats">
-        <div class="card"><div class="muted">Socket</div><strong id="socket-status">Connecting</strong></div>
-        <div class="card"><div class="muted">Source</div><strong id="source-status">Loading</strong></div>
-        <div class="card"><div class="muted">Watchlist</div><strong id="watch-count">0</strong></div>
-        <div class="card"><div class="muted">Unread</div><strong id="unread-count">0</strong></div>
+      <div class="hero-spotlight">
+        <div class="spotlight-card"><div class="kicker">Operator View</div><div id="app-environment" class="big-number">Loading</div><p class="mini-note" id="runtime-error">No runtime errors reported.</p></div>
+        <div class="spotlight-card"><div class="metric-row"><div class="metric-pill">Assets <strong id="asset-count">0</strong></div><div class="metric-pill">Signals <strong id="signal-count">0</strong></div><div class="metric-pill">Watchlist <strong id="watch-count">0</strong></div><div class="metric-pill">Notifications <strong id="notification-count">0</strong></div></div><div class="button-row"><button id="refresh-button" class="secondary">Refresh</button><button id="jump-best-button">Open Top Setup</button></div></div>
+        <div class="spotlight-card"><div class="kicker">Selection</div><div id="selected-asset" class="big-number">None</div><div id="selection-note" class="mini-note">Pick an opportunity card or market row to focus the chart.</div></div>
       </div>
     </section>
 
-    <section class="panel">
-      <h2>Runtime Diagnostics</h2>
-      <p>Bootstrap metadata shared with both the web client and an app client.</p>
-      <div class="diag" style="margin-top:12px;">
-        <div class="card"><div class="muted">Environment</div><strong id="app-environment">Loading</strong></div>
-        <div class="card"><div class="muted">Requested Source</div><strong id="requested-source">Loading</strong></div>
-        <div class="card"><div class="muted">Active Source</div><strong id="active-source">Loading</strong></div>
-        <div class="card"><div class="muted">Last Message</div><strong id="last-message-at">-</strong></div>
-        <div class="card"><div class="muted">API Base</div><strong id="api-base-value">-</strong></div>
-        <div class="card"><div class="muted">WebSocket URL</div><strong id="ws-url-value">-</strong></div>
-        <div class="card"><div class="muted">Secure Context</div><strong id="secure-context-status">Checking</strong></div>
-        <div class="card"><div class="muted">Service Worker</div><strong id="service-worker-status">Checking</strong></div>
-        <div class="card"><div class="muted">Android Asset Links</div><strong id="asset-links-status">Checking</strong></div>
-      </div>
-      <p id="runtime-error" class="muted" style="margin-top:12px;">No runtime errors reported.</p>
+    <section class="panel stack">
+      <div><div class="eyebrow">Priority board</div><h2 style="margin-top:12px;font-size:1.9rem;letter-spacing:-.04em;">What deserves attention right now</h2><p class="mini-note" style="margin-top:8px;">Ranking blends recent signal pressure, RSI tension, and short-term momentum so the dashboard behaves like a triage tool instead of a spreadsheet.</p></div>
+      <div id="opportunity-grid" class="opportunity-grid"></div>
     </section>
 
-    <section class="grid">
-      <div class="panel">
-        <h2>Session</h2>
-        <p>Demo account: <code>demo / demo1234</code></p>
-        <div class="forms" style="margin-top:12px;">
-          <label>Username<input id="login-username" value="demo" /></label>
-          <label>Password<input id="login-password" value="demo1234" type="password" /></label>
+    <section class="spotlight">
+      <div class="spotlight-head">
+        <div class="stack" style="gap:8px;"><div class="eyebrow">Spotlight</div><h2 id="spotlight-symbol" style="font-size:clamp(1.8rem,3vw,3rem);letter-spacing:-.04em;">Loading</h2><p id="spotlight-narrative" class="mini-note">Preparing asset narrative.</p></div>
+        <div class="metric-row"><div id="spotlight-trend" class="signal-chip neutral">Trend pending</div><div id="spotlight-signal" class="signal-chip neutral">Signal pending</div><div id="spotlight-interval" class="pill">Interval -</div></div>
+      </div>
+      <div id="detail-audit-warning" class="warning audit">Scanner audit warning</div>
+      <div id="asset-summary" class="summary-grid"></div>
+      <div class="detail-grid">
+        <div class="chart-shell">
+          <div class="chart-meta"><div><div class="kicker">Price structure</div><p class="mini-note" id="chart-caption">Latest candles with moving averages and volume pressure.</p></div><div id="chart-badges" class="metric-row"></div></div>
+          <div id="chart-box" class="chart-box"></div>
+          <div class="table-shell"><table><thead><tr><th>Candle Time</th><th>Open</th><th>Close</th><th>High</th><th>Low</th><th>Volume</th></tr></thead><tbody id="candle-body"></tbody></table></div>
+        </div>
+        <div class="insight-column">
+          <div class="insight-card"><div class="kicker">Setup readout</div><div id="setup-readout"></div></div>
+          <div class="insight-card"><div class="kicker">Signal ledger</div><div class="table-shell"><table><thead><tr><th>Time</th><th>Side</th><th>Strategy</th><th>Score</th></tr></thead><tbody id="asset-signal-body"></tbody></table></div></div>
+          <div class="insight-card"><div class="kicker">Notification inbox</div><div class="table-shell"><table><thead><tr><th>Time</th><th>Symbol</th><th>Status</th><th>Note</th></tr></thead><tbody id="notification-body"></tbody></table></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell"><div><div class="eyebrow">Market board</div><h2 style="margin-top:12px;">Ranked market view</h2></div><div id="overview-body" class="board-list"></div></div>
+      <div class="board-shell"><div><div class="eyebrow">Live tape</div><h2 style="margin-top:12px;">Recent signal flow</h2><div class="metric-row" style="margin-top:12px;"><div id="signal-filter-label" class="pill">Tape preset</div><div id="signal-filter-summary" class="mini-note">All delivery and all modes.</div></div><div id="signal-filter-presets" class="actions" style="margin-top:12px;"><button type="button" class="secondary" data-preset="operator">Operator</button><button type="button" class="secondary" data-preset="notified_only">Notified Only</button><button type="button" class="secondary" data-preset="scanner_audit">Scanner Audit</button><button type="button" class="secondary" data-preset="reset">Reset</button></div><div class="forms" style="margin-top:12px;"><label>Delivery<select id="signal-filter-delivery"><option value="">All delivery</option><option value="notified">Notified only</option><option value="suppressed">Suppressed only</option><option value="no_subscribers">No subscribers</option></select></label><label>Mode<select id="signal-filter-mode"><option value="">All modes</option><option value="realtime">Realtime only</option><option value="scanner">Scanner only</option></select></label></div><div class="checks" style="margin-top:8px;"><label><input id="signal-filter-include-suppressed" type="checkbox" checked /> Include suppressed</label><label><input id="signal-filter-audit-only" type="checkbox" /> Audit only</label></div></div><div id="signal-body" class="feed"></div></div>
+    </section>
+
+    <section class="grid-2">
+      <div class="panel stack">
+        <div><div class="eyebrow">Universe</div><h2 style="margin-top:12px;">Search coins and stocks</h2><p class="mini-note" style="margin-top:8px;">Use the registry to find live crypto symbols and watch-only stock names from one surface. Capability badges tell you which feeds exist today.</p></div>
+        <div class="forms">
+          <label>Search<input id="instrument-search-query" placeholder="BTC, Apple, Samsung, ETF" /></label>
+          <label>Market<select id="instrument-market-filter"><option value="">All markets</option><option value="COIN">Coin</option><option value="STOCK">Stock</option><option value="ETF">ETF</option></select></label>
         </div>
         <div class="actions">
-          <button id="login-button">Login</button>
-          <button id="logout-button" class="secondary">Logout</button>
-          <button id="refresh-button" class="secondary">Refresh</button>
+          <button id="instrument-search-button">Search</button>
+          <button id="instrument-reset-button" class="secondary">Reset</button>
+          <button id="instrument-open-live-button" class="secondary">Open Live Detail</button>
         </div>
-        <div class="forms" style="margin-top:12px;">
-          <label>New Username<input id="signup-username" placeholder="new user" /></label>
-          <label>Email<input id="signup-email" placeholder="name@example.com" /></label>
-        </div>
-        <div class="forms" style="margin-top:12px;">
-          <label>Password<input id="signup-password" type="password" placeholder="minimum 8 characters" /></label>
-          <label>Sign Up<button id="signup-button">Create Account</button></label>
-        </div>
-        <p id="auth-status" class="muted" style="margin-top:12px;">Loading session</p>
-        <p id="auth-message" class="muted"></p>
+        <div id="instrument-search-results" class="finder-results"></div>
       </div>
-
-      <div class="panel">
-        <h2>Watchlist And Alerts</h2>
-        <p>Same state is available to both the browser UI and an app client.</p>
+      <div class="panel stack">
+        <div><div class="eyebrow">Profile Builder</div><h2 style="margin-top:12px;">Custom signal thresholds</h2><p id="profile-selected-symbol" class="mini-note" style="margin-top:8px;">Select an instrument to configure user thresholds.</p></div>
+        <div id="profile-capabilities" class="finder-meta"></div>
+        <div id="profile-note" class="profile-note">Profiles are saved per symbol. Live evaluation is available only when candle data exists.</div>
+        <div class="profile-grid">
+          <label>RSI buy<input id="profile-rsi-buy" type="number" min="1" max="99" step="0.1" /></label>
+          <label>RSI sell<input id="profile-rsi-sell" type="number" min="1" max="99" step="0.1" /></label>
+          <label>Volume multiplier<input id="profile-volume-multiplier" type="number" min="1" max="10" step="0.1" /></label>
+          <label>Score threshold<input id="profile-score-threshold" type="number" min="1" max="100" step="1" /></label>
+          <label>Orderbook bias<input id="profile-orderbook-threshold" type="number" min="0.1" max="10" step="0.1" /></label>
+          <label>Derivatives bias<input id="profile-derivatives-threshold" type="number" min="0.1" max="10" step="0.1" /></label>
+        </div>
         <div class="checks">
-          <label><input id="web-enabled" type="checkbox" /> Web alerts</label>
-          <label><input id="email-enabled" type="checkbox" /> Email alerts</label>
+          <label><input id="profile-enabled" type="checkbox" /> Enable custom profile</label>
+          <label><input id="profile-use-orderbook" type="checkbox" /> Require orderbook confirm</label>
+          <label><input id="profile-use-derivatives" type="checkbox" /> Require derivatives confirm</label>
         </div>
         <div class="actions">
-          <select id="watch-symbol"></select>
-          <button id="watch-add-button">Add</button>
-          <button id="settings-save-button" class="secondary">Save</button>
-        </div>
-        <div class="scroll" style="margin-top:12px;">
-          <table><thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th></th></tr></thead><tbody id="watch-body"></tbody></table>
+          <button id="profile-save-button">Save Profile</button>
+          <button id="profile-refresh-button" class="secondary">Reload Profile</button>
+          <button id="profile-use-watch-button" class="secondary">Add To Watchlist</button>
         </div>
       </div>
     </section>
 
-    <section class="panel">
-      <h2>Dashboard</h2>
-      <p>Rendered from <code>/api/client/dashboard</code>.</p>
-      <div class="cards" style="margin:12px 0;">
-        <div class="card"><div class="muted">Assets</div><strong id="asset-count">0</strong></div>
-        <div class="card"><div class="muted">Signals</div><strong id="signal-count">0</strong></div>
-        <div class="card"><div class="muted">Notifications</div><strong id="notification-count">0</strong></div>
-        <div class="card"><div class="muted">Selected Asset</div><strong id="selected-asset">None</strong></div>
+    <section class="utility">
+      <div class="panel stack">
+        <div><div class="eyebrow">Account</div><h2 style="margin-top:12px;">Session and alert controls</h2><p id="auth-status" class="mini-note" style="margin-top:8px;">Loading session.</p><p id="auth-message" class="mini-note"></p></div>
+        <div class="forms"><label>Username<input id="login-username" value="demo" /></label><label>Password<input id="login-password" value="demo1234" type="password" /></label></div>
+        <div class="actions"><button id="login-button">Login</button><button id="logout-button" class="secondary">Logout</button><button id="signup-button" class="secondary">Create account</button></div>
+        <div class="forms"><label>New username<input id="signup-username" placeholder="new user" /></label><label>Email<input id="signup-email" placeholder="name@example.com" /></label></div>
+        <div class="forms"><label>Password<input id="signup-password" type="password" placeholder="minimum 8 characters" /></label><label>Watch symbol<select id="watch-symbol"></select></label></div>
+        <div class="checks"><label><input id="web-enabled" type="checkbox" /> Web alerts</label><label><input id="email-enabled" type="checkbox" /> Email alerts</label></div>
+        <div class="actions"><button id="watch-add-button">Add watch</button><button id="settings-save-button" class="secondary">Save alerts</button><button id="session-refresh-button" class="secondary">Sync state</button></div>
+        <div class="table-shell"><table><thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th>Action</th></tr></thead><tbody id="watch-body"></tbody></table></div>
       </div>
-      <div class="scroll"><table><thead><tr><th>Symbol</th><th>Price</th><th>Change</th><th>RSI</th><th>Signal</th></tr></thead><tbody id="overview-body"></tbody></table></div>
-      <div class="scroll" style="margin-top:14px;"><table><thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Strategy</th><th>Reason</th></tr></thead><tbody id="signal-body"></tbody></table></div>
-    </section>
-
-    <section class="panel">
-      <h2>Asset Detail</h2>
-      <p>Rendered from <code>/api/client/assets/{symbol}</code>.</p>
-      <div id="asset-summary" class="summary" style="margin:12px 0;"></div>
-      <div class="detail">
-        <div class="scroll"><table><thead><tr><th>Candle Time</th><th>Open</th><th>Close</th><th>High</th><th>Low</th><th>Volume</th></tr></thead><tbody id="candle-body"></tbody></table></div>
-        <div>
-          <div class="scroll"><table><thead><tr><th>Time</th><th>Side</th><th>Strategy</th><th>Score</th></tr></thead><tbody id="asset-signal-body"></tbody></table></div>
-          <div class="scroll" style="margin-top:14px;"><table><thead><tr><th>Time</th><th>Symbol</th><th>Status</th><th>Note</th></tr></thead><tbody id="notification-body"></tbody></table></div>
+      <div class="panel stack">
+        <div><div class="eyebrow">System</div><h2 style="margin-top:12px;">Delivery diagnostics</h2><p class="mini-note" style="margin-top:8px;">These are still exposed for operators, but pushed below the trading surface so the product reads like a tool, not a console.</p></div>
+        <div class="runtime-grid">
+          <div class="summary-item"><div class="kicker">Requested source</div><strong id="requested-source">Loading</strong></div>
+          <div class="summary-item"><div class="kicker">Active source</div><strong id="active-source">Loading</strong></div>
+          <div class="summary-item"><div class="kicker">API base</div><strong id="api-base-value">-</strong></div>
+          <div class="summary-item"><div class="kicker">Socket URL</div><strong id="ws-url-value">-</strong></div>
+          <div class="summary-item"><div class="kicker">Secure Context</div><strong id="secure-context-status">Checking</strong></div>
+          <div class="summary-item"><div class="kicker">Service worker</div><strong id="service-worker-status">Checking</strong></div>
+          <div class="summary-item"><div class="kicker">Asset links</div><strong id="asset-links-status">Checking</strong></div>
+          <div class="summary-item"><div class="kicker">Selected asset</div><strong id="runtime-selected-asset">None</strong></div>
         </div>
       </div>
     </section>
   </main>
-
   <script>
-    const state = { token: localStorage.getItem('signal-flow-token'), refreshToken: localStorage.getItem('signal-flow-refresh-token'), apiBase: location.origin, wsUrl: '', appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' }, assets: [], selectedSymbol: null, socket: null, heartbeat: null, refreshTimer: null, installPrompt: null, release: null, endpoints: { bootstrap: '/api/client/bootstrap', dashboard: '/api/client/dashboard', asset_detail: '/api/client/assets/{symbol}', login: '/api/auth/login', signup: '/api/auth/signup', refresh: '/api/auth/refresh', logout: '/api/auth/logout', sessions: '/api/auth/sessions', watchlist: '/api/watchlist', notifications: '/api/notifications', notification_settings: '/api/notification-settings' } };
+    const state = {
+      token: localStorage.getItem('signal-flow-token'),
+      refreshToken: localStorage.getItem('signal-flow-refresh-token'),
+      apiBase: location.origin,
+      wsUrl: '',
+      appMeta: { name: 'Signal Flow Live', version: '0.4.0', environment: 'unknown' },
+      assets: [],
+      selectedSymbol: null,
+      socket: null,
+      heartbeat: null,
+      refreshTimer: null,
+      installPrompt: null,
+      release: null,
+      dashboard: null,
+      detail: null,
+      activeInstrument: null,
+      activeProfile: null,
+      topOpportunity: null,
+      signalFilters: {
+        delivery: '',
+        mode: '',
+        includeSuppressed: true,
+        auditOnly: false
+      },
+      endpoints: {
+        bootstrap: '/api/client/bootstrap',
+        dashboard: '/api/client/dashboard',
+        asset_detail: '/api/client/assets/{symbol}',
+        instrument_search: '/api/instruments/search',
+        instrument_detail: '/api/instruments/{symbol}',
+        signal_profile: '/api/signal-profiles/{symbol}',
+        login: '/api/auth/login',
+        signup: '/api/auth/signup',
+        refresh: '/api/auth/refresh',
+        logout: '/api/auth/logout',
+        sessions: '/api/auth/sessions',
+        watchlist: '/api/watchlist',
+        notifications: '/api/notifications',
+        notification_settings: '/api/notification-settings'
+      }
+    };
+
     const el = id => document.getElementById(id);
-    const fmtNum = value => value == null ? '-' : new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value);
+    const fmtNum = value => value == null ? '-' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
     const fmtPct = value => value == null ? '-' : `${value.toFixed(2)}%`;
-    const fmtTime = value => value ? new Date(value).toLocaleString('ko-KR') : '-';
+    const fmtTime = value => value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
+    const fmtDateTime = value => value ? new Date(value).toLocaleString() : '-';
     const authHeaders = () => state.token ? { Authorization: `Bearer ${state.token}` } : {};
     const httpUrl = path => path.startsWith('http') ? path : `${state.apiBase}${path}`;
     const assetUrl = symbol => httpUrl((state.endpoints.asset_detail || '/api/client/assets/{symbol}').replace('{symbol}', encodeURIComponent(symbol)));
-    const msg = (text, bad = false) => { el('auth-message').textContent = text || ''; el('auth-message').style.color = bad ? 'var(--sell)' : 'var(--muted)'; };
+    const instrumentDetailUrl = symbol => httpUrl((state.endpoints.instrument_detail || '/api/instruments/{symbol}').replace('{symbol}', encodeURIComponent(symbol)));
+    const signalProfileUrl = symbol => httpUrl((state.endpoints.signal_profile || '/api/signal-profiles/{symbol}').replace('{symbol}', encodeURIComponent(symbol)));
+    const dashboardUrl = () => {
+      const params = new URLSearchParams();
+      if (state.signalFilters.delivery) params.set('signal_delivery', state.signalFilters.delivery);
+      if (state.signalFilters.mode) params.set('signal_data_mode', state.signalFilters.mode);
+      if (!state.signalFilters.includeSuppressed) params.set('include_suppressed', 'false');
+      if (state.signalFilters.auditOnly) params.set('signal_audit_only', 'true');
+      const path = state.endpoints.dashboard || '/api/client/dashboard';
+      return `${path}${params.toString() ? `?${params.toString()}` : ''}`;
+    };
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const round = (value, digits = 1) => value == null ? null : Number(value.toFixed(digits));
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const ALLOWED_SIGNAL_DELIVERIES = new Set(['', 'notified', 'suppressed', 'no_subscribers', 'pending']);
+    const ALLOWED_SIGNAL_MODES = new Set(['', 'realtime', 'scanner']);
+    const SIGNAL_FILTER_PRESETS = {
+      operator: { delivery: '', mode: '', includeSuppressed: true, auditOnly: false },
+      notified_only: { delivery: 'notified', mode: '', includeSuppressed: false, auditOnly: false },
+      scanner_audit: { delivery: '', mode: 'scanner', includeSuppressed: true, auditOnly: true },
+      reset: { delivery: '', mode: '', includeSuppressed: true, auditOnly: false }
+    };
+    const SIGNAL_FILTER_PRESET_LABELS = {
+      operator: 'Operator',
+      notified_only: 'Notified Only',
+      scanner_audit: 'Scanner Audit',
+      reset: 'Operator'
+    };
+    const SIGNAL_FILTER_PRESET_TONES = {
+      operator: 'operator',
+      notified_only: 'notified',
+      scanner_audit: 'scanner',
+      reset: 'operator'
+    };
+    const SIGNAL_FILTER_PRESET_NOTES = {
+      operator: 'Full tape with delivery context for operators.',
+      notified_only: 'Only signals that actually triggered delivery.',
+      scanner_audit: 'Only scanner audit candidates that require review before action.',
+      reset: 'Full tape with delivery context for operators.'
+    };
+    const msg = (text, bad = false) => {
+      el('auth-message').textContent = text || '';
+      el('auth-message').style.color = bad ? 'var(--sell)' : 'var(--muted)';
+    };
+
+    function currentSignalPreset() {
+      return Object.entries(SIGNAL_FILTER_PRESETS).find(([, value]) =>
+        value.delivery === state.signalFilters.delivery
+        && value.mode === state.signalFilters.mode
+        && value.includeSuppressed === state.signalFilters.includeSuppressed
+        && value.auditOnly === state.signalFilters.auditOnly
+      )?.[0] || '';
+    }
+
+    function currentSignalTone() {
+      return SIGNAL_FILTER_PRESET_TONES[currentSignalPreset()] || 'custom';
+    }
+
+    function signalFilterSummary() {
+      const parts = [];
+      parts.push(state.signalFilters.delivery ? `delivery ${state.signalFilters.delivery}` : 'all delivery');
+      parts.push(state.signalFilters.mode ? `${state.signalFilters.mode} only` : 'all modes');
+      if (!state.signalFilters.includeSuppressed) parts.push('suppressed hidden');
+      if (state.signalFilters.auditOnly) parts.push('audit only');
+      return parts.join(' / ');
+    }
+
+    function signalFilterNarrative(source = null) {
+      const activePreset = currentSignalPreset();
+      const presetNote = SIGNAL_FILTER_PRESET_NOTES[activePreset] || `Custom tape using ${signalFilterSummary()}.`;
+      if (!source) return presetNote;
+      if (source.last_message_at) {
+        const ageSeconds = Math.round((Date.now() - new Date(source.last_message_at).getTime()) / 1000);
+        return `${presetNote} ${ageSeconds <= 10 ? 'Realtime stream healthy.' : `Feed lag ${ageSeconds}s.`}`;
+      }
+      return `${presetNote} State: ${source.state || 'idle'}.`;
+    }
+
+    function applySignalFiltersToUi() {
+      el('signal-filter-delivery').value = state.signalFilters.delivery;
+      el('signal-filter-mode').value = state.signalFilters.mode;
+      el('signal-filter-include-suppressed').checked = state.signalFilters.includeSuppressed;
+      el('signal-filter-audit-only').checked = state.signalFilters.auditOnly;
+      const activePreset = currentSignalPreset();
+      const activeTone = currentSignalTone();
+      Array.from(document.querySelectorAll('#signal-filter-presets [data-preset]')).forEach(button => {
+        button.classList.toggle('secondary', button.dataset.preset !== activePreset);
+        button.dataset.active = button.dataset.preset === activePreset ? 'true' : 'false';
+        button.dataset.tone = SIGNAL_FILTER_PRESET_TONES[button.dataset.preset] || 'custom';
+      });
+      const presetLabel = SIGNAL_FILTER_PRESET_LABELS[activePreset] || 'Custom Tape';
+      el('signal-filter-label').textContent = presetLabel;
+      el('signal-filter-summary').textContent = SIGNAL_FILTER_PRESET_NOTES[activePreset] || signalFilterSummary();
+      el('hero-feed-preset').textContent = presetLabel;
+      el('signal-filter-label').dataset.tone = activeTone;
+      el('hero-feed-preset').dataset.tone = activeTone;
+      el('hero-feed-note').textContent = signalFilterNarrative(state.dashboard?.source || null);
+    }
+
+    function applySignalPreset(preset, { syncUrl = true } = {}) {
+      const next = SIGNAL_FILTER_PRESETS[preset];
+      if (!next) return;
+      state.signalFilters.delivery = next.delivery;
+      state.signalFilters.mode = next.mode;
+      state.signalFilters.includeSuppressed = next.includeSuppressed;
+      state.signalFilters.auditOnly = next.auditOnly;
+      applySignalFiltersToUi();
+      if (syncUrl) syncUrlFromState();
+    }
+
+    function readStateFromUrl() {
+      const params = new URLSearchParams(location.search);
+      const preset = params.get('signal_preset') || '';
+      if (preset && SIGNAL_FILTER_PRESETS[preset]) {
+        applySignalPreset(preset, { syncUrl: false });
+      }
+      if (params.has('signal_delivery')) {
+        const delivery = params.get('signal_delivery') || '';
+        state.signalFilters.delivery = ALLOWED_SIGNAL_DELIVERIES.has(delivery) ? delivery : '';
+      }
+      if (params.has('signal_data_mode')) {
+        const mode = params.get('signal_data_mode') || '';
+        state.signalFilters.mode = ALLOWED_SIGNAL_MODES.has(mode) ? mode : '';
+      }
+      if (params.has('include_suppressed')) {
+        state.signalFilters.includeSuppressed = params.get('include_suppressed') !== 'false';
+      }
+      if (params.has('signal_audit_only')) {
+        state.signalFilters.auditOnly = params.get('signal_audit_only') === 'true';
+      }
+      state.selectedSymbol = params.get('symbol') || state.selectedSymbol;
+    }
+
+    function syncUrlFromState() {
+      const params = new URLSearchParams(location.search);
+      const preset = currentSignalPreset();
+      if (preset) params.set('signal_preset', preset);
+      else params.delete('signal_preset');
+      if (state.signalFilters.delivery) params.set('signal_delivery', state.signalFilters.delivery);
+      else params.delete('signal_delivery');
+      if (state.signalFilters.mode) params.set('signal_data_mode', state.signalFilters.mode);
+      else params.delete('signal_data_mode');
+      if (!state.signalFilters.includeSuppressed) params.set('include_suppressed', 'false');
+      else params.delete('include_suppressed');
+      if (state.signalFilters.auditOnly) params.set('signal_audit_only', 'true');
+      else params.delete('signal_audit_only');
+      if (state.selectedSymbol) params.set('symbol', state.selectedSymbol);
+      else params.delete('symbol');
+      const nextUrl = `${location.pathname}${params.toString() ? `?${params.toString()}` : ''}${location.hash}`;
+      history.replaceState(null, '', nextUrl);
+    }
 
     async function requestJson(path, options = {}, retry = true) {
       const response = await fetch(httpUrl(path), { ...options, headers: { ...(options.headers || {}), ...authHeaders() } });
@@ -174,34 +432,123 @@
       localStorage.removeItem('signal-flow-refresh-token');
     }
 
-    function renderAssetOptions() { el('watch-symbol').innerHTML = state.assets.map(asset => `<option value="${asset.symbol}">${asset.symbol} · ${asset.name}</option>`).join(''); }
-    function renderSession(session) { el('auth-status').textContent = session.authenticated && session.user ? `Signed in as ${session.user.username} (${session.user.email})` : 'Signed out. Use demo or create a new account.'; }
+    function scoreTier(score) {
+      if (score >= 80) return 'high';
+      if (score >= 60) return 'mid';
+      return 'low';
+    }
+
+    function latestSignalFor(symbol) {
+      return state.dashboard?.signals?.find(row => row.symbol === symbol) || null;
+    }
+
+    function computeOpportunity(row, rank = 0) {
+      const signal = latestSignalFor(row.symbol);
+      let score = 32;
+      if (row.rsi14 != null) score += clamp(Math.abs(row.rsi14 - 50) * 1.25, 0, 24);
+      if (row.sma5 != null && row.sma20 != null && row.sma5 > row.sma20) score += 12;
+      if (signal) score += clamp(Number(signal.score || 0) * 0.35, 0, 28);
+      score += clamp(Math.abs(row.change_rate || 0) * 1.8, 0, 10);
+      score = clamp(Math.round(score - rank * 3), 0, 99);
+
+      const bias = signal?.signal_type || (row.rsi14 != null && row.rsi14 < 35 ? 'BUY' : row.rsi14 != null && row.rsi14 > 68 ? 'SELL' : 'WATCH');
+      const regime = row.sma5 != null && row.sma20 != null ? (row.sma5 > row.sma20 ? 'Trend up' : 'Trend soft') : 'Trend unknown';
+      const tension = row.rsi14 == null ? 'RSI pending' : row.rsi14 < 35 ? 'Oversold pressure' : row.rsi14 > 68 ? 'Overheated move' : 'Balanced flow';
+      return { ...row, score, bias, regime, tension, signal, narrative: signal?.reason || `${tension}. ${regime}.` };
+    }
+
+    function buildRankedOverview(rows) {
+      const computed = rows.map((row, index) => computeOpportunity(row, index));
+      if (!state.signalFilters.auditOnly) return computed.sort((a, b) => b.score - a.score);
+
+      const auditRanked = computed
+        .map(row => {
+          const auditLabel = summarizeScannerAuditReason(row.signal?.notification_delivery_reason);
+          const isAuditCandidate = row.data_mode === 'scanner' && (!!auditLabel || row.signal?.notification_delivery === 'suppressed');
+          let auditScore = row.score;
+          if (isAuditCandidate) auditScore += 40;
+          if (auditLabel === 'delayed') auditScore += 6;
+          if (auditLabel.includes('market') || auditLabel.includes('session')) auditScore += 4;
+          return {
+            ...row,
+            auditLabel,
+            isAuditCandidate,
+            auditScore,
+            narrative: isAuditCandidate && auditLabel ? `${auditLabel} audit. ${row.narrative}` : row.narrative,
+          };
+        })
+        .filter(row => row.isAuditCandidate)
+        .sort((a, b) => (b.auditScore || 0) - (a.auditScore || 0) || b.score - a.score);
+
+      return auditRanked;
+    }
+
+    function deriveSetupReadout(detail) {
+      const snapshot = detail.snapshot || {};
+      const latestSignal = detail.signals?.[0] || null;
+      const auditBadges = detailAuditBadges(detail);
+      const spread = snapshot.bollinger_upper != null && snapshot.bollinger_lower != null
+        ? ((snapshot.bollinger_upper - snapshot.bollinger_lower) / Math.max(snapshot.close_price || 1, 1)) * 100
+        : null;
+      const regime = snapshot.sma5 != null && snapshot.sma20 != null
+        ? (snapshot.sma5 > snapshot.sma20 ? 'Bullish structure' : 'Compression / fade risk')
+        : 'Structure pending';
+      const momentum = snapshot.rsi14 == null ? 'RSI pending' : snapshot.rsi14 < 35 ? 'Momentum washed out' : snapshot.rsi14 > 68 ? 'Momentum stretched' : 'Momentum balanced';
+      const rows = [
+        { label: 'Signal conviction', value: latestSignal ? `${latestSignal.signal_type} ${round(latestSignal.score || 0, 0)}` : 'No active signal', tone: latestSignal?.signal_type === 'BUY' ? 'buy' : latestSignal?.signal_type === 'SELL' ? 'sell' : 'muted' },
+        { label: 'Trend regime', value: regime, tone: snapshot.sma5 != null && snapshot.sma20 != null && snapshot.sma5 > snapshot.sma20 ? 'buy' : 'muted' },
+        { label: 'Momentum', value: momentum, tone: snapshot.rsi14 != null && snapshot.rsi14 > 68 ? 'sell' : snapshot.rsi14 != null && snapshot.rsi14 < 35 ? 'buy' : 'muted' },
+        { label: 'Band width', value: spread == null ? 'Pending' : `${spread.toFixed(2)}%`, tone: spread != null && spread > 0.75 ? 'sell' : 'muted' }
+      ];
+      if (auditBadges.length) {
+        rows.splice(1, 0, {
+          label: 'Audit state',
+          value: auditBadges.join(' / '),
+          tone: 'sell',
+        });
+      }
+      return rows;
+    }
+
+    function renderAssetOptions() {
+      el('watch-symbol').innerHTML = state.assets.map(asset => `<option value="${escapeHtml(asset.symbol)}">${escapeHtml(asset.symbol)} - ${escapeHtml(asset.name)}</option>`).join('');
+    }
+
+    function renderSession(session) {
+      el('auth-status').textContent = session.authenticated && session.user
+        ? `Signed in as ${session.user.username} (${session.user.email})`
+        : 'Signed out. Use the demo account or create a fresh session.';
+    }
+
     function renderRuntimeMeta(app, source) {
       const requested = source.requested_source || 'unknown';
       const active = source.active_source || requested;
+      const scannerRequested = source.scanner?.requested_provider || 'synthetic';
+      const scannerActive = source.scanner?.active_provider || scannerRequested;
       const value = `${active}${source.interval ? ` / ${source.interval}` : ''}${source.state ? ` / ${source.state}` : ''}`;
       const fallback = requested !== active;
       el('source-status').textContent = value;
       el('app-environment').textContent = `${app.name} ${app.version} / ${app.environment}`;
-      el('requested-source').textContent = requested;
-      el('active-source').textContent = active;
+      el('requested-source').textContent = `${requested} + scanner ${scannerRequested}`;
+      el('active-source').textContent = `${active} + scanner ${scannerActive}`;
       el('last-message-at').textContent = fmtTime(source.last_message_at);
       el('api-base-value').textContent = state.apiBase || '-';
       el('ws-url-value').textContent = state.wsUrl || '-';
       el('runtime-error').textContent = source.last_error ? `Last error: ${source.last_error}` : 'No runtime errors reported.';
       el('runtime-warning').style.display = fallback ? 'block' : 'none';
-      el('runtime-warning').textContent = fallback ? `Fallback active. Requested ${requested} but serving ${active}.` : '';
+      el('runtime-warning').textContent = fallback ? `Fallback active. Requested ${requested} but currently serving ${active}.` : '';
+      el('hero-feed-note').textContent = signalFilterNarrative(source);
     }
 
     function renderInstallState() {
       const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       if (standalone) {
-        el('install-state').textContent = 'Installed mode';
+        el('install-state').textContent = 'Installed';
         el('install-button').disabled = true;
         return;
       }
       if (state.installPrompt) {
-        el('install-state').textContent = 'Install available';
+        el('install-state').textContent = 'Install ready';
         el('install-button').disabled = false;
         return;
       }
@@ -211,7 +558,7 @@
 
     function renderReleaseStatus(data) {
       state.release = data;
-      el('secure-context-status').textContent = window.isSecureContext ? 'HTTPS / secure' : 'Not secure';
+      el('secure-context-status').textContent = window.isSecureContext ? 'Secure' : 'Not secure';
       el('service-worker-status').textContent = navigator.serviceWorker?.controller ? 'Active' : 'Registered only';
       el('asset-links-status').textContent = data.android.assetlinks_ready ? 'Configured' : 'Not configured';
       if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
@@ -220,29 +567,425 @@
       }
     }
 
+    function watchlistAuditBadges(row) {
+      const overviewRow = state.dashboard?.overview?.find(item => item.symbol === row.symbol) || null;
+      const runtime = row.symbol === state.activeInstrument?.symbol
+        ? state.activeInstrument?.runtime || overviewRow
+        : overviewRow;
+      if (!runtime || runtime.data_mode !== 'scanner') return [];
+      const badges = [];
+      if (runtime.is_delayed) badges.push('delayed');
+      if (runtime.market_session === 'post') badges.push('post-market');
+      else if (runtime.market_session === 'pre') badges.push('pre-market');
+      else if (runtime.market_session === 'closed') badges.push('closed-session');
+      if (badges.length) badges.unshift('audit watch');
+      return badges;
+    }
+
+    function watchlistAddMessage(symbol) {
+      const runtime = symbol === state.activeInstrument?.symbol ? state.activeInstrument : null;
+      const badges = runtime ? instrumentAuditBadges(runtime) : [];
+      if (!badges.length) return `Added ${symbol}.`;
+      return `Added audit watch for ${symbol}. Context: ${badges.join(' / ')}.`;
+    }
+
     function renderWatchlist(rows) {
-      el('watch-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${row.symbol}</td><td>${fmtNum(row.last_price)}</td><td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</td><td><button class="secondary watch-remove" data-symbol="${row.symbol}">Remove</button></td></tr>`).join('') : '<tr><td colspan="4" class="muted">No watchlist items.</td></tr>';
+      el('watch-body').innerHTML = rows.length
+        ? rows.map(row => {
+            const auditBadges = watchlistAuditBadges(row);
+            return `<tr><td>${escapeHtml(row.symbol)}${auditBadges.length ? `<div class="mini-note">${auditBadges.map(label => `<span class="metric-pill">${escapeHtml(label)}</span>`).join('')}</div>` : ''}</td><td>${fmtNum(row.last_price)}</td><td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</td><td><button class="secondary watch-remove" data-symbol="${escapeHtml(row.symbol)}">Remove</button></td></tr>`;
+          }).join('')
+        : '<tr><td colspan="4" class="muted">No watchlist items yet.</td></tr>';
     }
 
     function renderNotifications(rows) {
-      el('notification-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${fmtTime(row.created_at)}</td><td>${row.symbol}</td><td class="${row.is_read ? 'muted' : 'buy'}">${row.is_read ? 'Read' : 'Unread'}</td><td>${row.strategy_name}<div class="muted">${row.reason}</div>${row.is_read ? '' : `<div style="margin-top:8px;"><button class="secondary notif-read" data-id="${row.id}">Mark Read</button></div>`}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">No notifications.</td></tr>';
+      el('notification-body').innerHTML = rows.length
+        ? rows.map(row => `<tr><td>${fmtDateTime(row.created_at)}</td><td>${escapeHtml(row.symbol)}</td><td class="${row.is_read ? 'muted' : 'buy'}">${row.is_read ? 'Read' : 'Unread'}</td><td>${escapeHtml(row.strategy_name)}<div class="mini-note">${escapeHtml(row.reason)}</div>${row.is_read ? '' : `<div style="margin-top:8px;"><button class="secondary notif-read" data-id="${row.id}">Mark read</button></div>`}</td></tr>`).join('')
+        : '<tr><td colspan="4" class="muted">No notifications.</td></tr>';
+    }
+
+    function summarizeScannerAuditReason(reason) {
+      if (!reason || !reason.startsWith('scanner_')) return '';
+      if (reason === 'scanner_delayed_blocked') return 'delayed';
+      if (reason.startsWith('scanner_session_blocked:')) {
+        const session = reason.split(':')[1] || 'scanner';
+        if (session === 'post') return 'post-market';
+        if (session === 'pre') return 'pre-market';
+        if (session === 'closed') return 'closed-session';
+        return `${session}-session`;
+      }
+      return 'scanner audit';
     }
 
     function renderSignals(rows) {
-      el('signal-body').innerHTML = rows.length ? rows.map(row => `<tr><td>${fmtTime(row.created_at)}</td><td>${row.symbol}</td><td class="${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}</td><td>${row.strategy_name}</td><td>${row.reason}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">No recent signals.</td></tr>';
+      el('signal-body').innerHTML = rows.length
+        ? rows.map(row => {
+            const deliveryTone = row.notification_delivery === 'suppressed' ? 'neutral' : row.notification_delivery === 'notified' ? 'buy' : 'muted';
+            const deliveryLabel = row.notification_delivery === 'suppressed'
+              ? `suppressed${row.notification_delivery_reason ? ` / ${row.notification_delivery_reason}` : ''}`
+              : row.notification_delivery === 'notified'
+                ? `notified / ${row.notification_count || 0}`
+                : (row.notification_delivery || 'pending');
+            const auditLabel = summarizeScannerAuditReason(row.notification_delivery_reason);
+            return `<article class="feed-item"><strong><span class="signal-chip ${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}</span>${escapeHtml(row.symbol)}</strong><div class="mini-note">${escapeHtml(row.strategy_name)} at ${fmtDateTime(row.created_at)}</div><div>${escapeHtml(row.reason)}</div><div class="mini-note" style="margin-top:8px;"><span class="signal-chip ${deliveryTone}">${escapeHtml(deliveryLabel)}</span>${auditLabel ? `<span class="signal-chip neutral">${escapeHtml(auditLabel)}</span>` : ''}</div></article>`;
+          }).join('')
+        : '<div class="feed-item"><div class="mini-note">No recent signals.</div></div>';
+    }
+
+    function renderOpportunityCards(rows) {
+      const ranked = rows.slice(0, 3);
+      el('opportunity-grid').innerHTML = ranked.length
+        ? ranked.map((row, index) => `<article class="opportunity-card ${state.selectedSymbol === row.symbol ? 'active' : ''}" data-symbol="${escapeHtml(row.symbol)}"><div style="display:flex;justify-content:space-between;gap:12px;align-items:start;"><div><div class="kicker">${state.signalFilters.auditOnly ? `Audit ${index + 1}` : `Priority ${index + 1}`}</div><h3 style="margin-top:8px;font-size:1.55rem;letter-spacing:-.04em;">${escapeHtml(row.symbol)}</h3><div class="mini-note">${escapeHtml(row.name || '')}</div></div><div class="score-ring" data-score="${scoreTier(row.score)}" style="--score-angle:${Math.round(row.score * 3.6)}deg;">${row.score}</div></div><div class="metric-row"><div class="metric-pill">${fmtNum(row.price)}</div><div class="metric-pill ${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</div><div class="metric-pill">${row.rsi14 == null ? 'RSI -' : `RSI ${row.rsi14.toFixed(1)}`}</div>${row.auditLabel ? `<div class="metric-pill">${escapeHtml(row.auditLabel)}</div>` : ''}</div><div class="signal-chip ${row.bias === 'BUY' ? 'buy' : row.bias === 'SELL' ? 'sell' : 'neutral'}">${row.bias}</div><div>${escapeHtml(row.narrative)}</div><div class="mini-note">${escapeHtml(row.regime)}. ${escapeHtml(row.tension)}.</div></article>`).join('')
+        : `<div class="opportunity-card"><div class="mini-note">${state.signalFilters.auditOnly ? 'No audit candidates in the current tape.' : 'No market opportunities yet.'}</div></div>`;
     }
 
     function renderOverview(rows) {
-      el('overview-body').innerHTML = rows.length ? rows.map(row => `<tr class="asset-row ${state.selectedSymbol === row.symbol ? 'selected' : ''}" data-symbol="${row.symbol}"><td>${row.symbol}${row.in_watchlist ? ' <span class="pill">Watch</span>' : ''}</td><td>${fmtNum(row.price)}</td><td class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</td><td>${row.rsi14 == null ? '-' : row.rsi14.toFixed(1)}</td><td class="${row.recent_signal_type === 'BUY' ? 'buy' : row.recent_signal_type === 'SELL' ? 'sell' : ''}">${row.recent_signal_type || '-'}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">No overview data.</td></tr>';
+      el('overview-body').innerHTML = rows.length
+        ? rows.map((row, index) => `<article class="board-row ${state.selectedSymbol === row.symbol ? 'active' : ''}" data-symbol="${escapeHtml(row.symbol)}"><div class="board-rank">${index + 1}</div><div><strong>${escapeHtml(row.symbol)} ${row.in_watchlist ? '<span class="pill">Watch</span>' : ''}${row.auditLabel ? ` <span class="pill">${escapeHtml(row.auditLabel)}</span>` : ''}</strong><small>${escapeHtml(row.narrative)}</small></div><div style="text-align:right;"><div>${fmtNum(row.price)}</div><div class="${row.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</div></div></article>`).join('')
+        : `<div class="board-row"><div class="mini-note">${state.signalFilters.auditOnly ? 'No audit review rows.' : 'No overview data.'}</div></div>`;
+    }
+
+    function renderInstrumentSearch(rows) {
+      el('instrument-search-results').innerHTML = rows.length
+        ? rows.map(row => {
+            const caps = [
+              row.capabilities.has_realtime_feed ? 'realtime' : null,
+              row.capabilities.has_volume_feed ? 'volume' : null,
+              row.capabilities.has_orderbook_feed ? 'orderbook' : null,
+              row.capabilities.has_derivatives_feed ? 'derivatives' : null,
+            ].filter(Boolean);
+            const runtime = row.runtime || null;
+            const runtimePills = [
+              runtime?.data_mode || null,
+              runtime?.data_source || null,
+              runtime?.market_session || null,
+              runtime?.is_delayed ? 'delayed' : null,
+            ].filter(Boolean);
+            return `<article class="finder-row ${state.activeInstrument?.symbol === row.symbol ? 'active' : ''}" data-symbol="${escapeHtml(row.symbol)}">
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;">
+                <div>
+                  <strong>${escapeHtml(row.symbol)}</strong>
+                  <div class="mini-note">${escapeHtml(row.name)} · ${escapeHtml(row.exchange)} · ${escapeHtml(row.market_type)}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div>${fmtNum(row.last_price)}</div>
+                  <div class="${(row.change_rate || 0) >= 0 ? 'positive' : 'negative'}">${fmtPct(row.change_rate)}</div>
+                </div>
+              </div>
+              <div class="finder-meta">${caps.length ? caps.map(cap => `<span class="metric-pill">${cap}</span>`).join('') : '<span class="metric-pill">watch only</span>'}${runtimePills.map(cap => `<span class="metric-pill">${escapeHtml(cap)}</span>`).join('')}<span class="metric-pill">${escapeHtml(row.quote_currency)}</span><span class="metric-pill">${escapeHtml(row.category)}</span></div>
+            </article>`;
+          }).join('')
+        : '<div class="finder-row"><div class="mini-note">No instruments found.</div></div>';
+    }
+
+    function instrumentAuditBadges(instrument) {
+      const runtime = instrument?.runtime || null;
+      if (!runtime || runtime.data_mode !== 'scanner') return [];
+      const badges = [];
+      if (runtime.is_delayed) badges.push('delayed');
+      if (runtime.market_session === 'post') badges.push('post-market');
+      else if (runtime.market_session === 'pre') badges.push('pre-market');
+      else if (runtime.market_session === 'closed') badges.push('closed-session');
+      return badges;
+    }
+
+    function profileAuditNote(instrument) {
+      const auditBadges = instrumentAuditBadges(instrument);
+      if (!auditBadges.length) return '';
+      return `Review-only scanner context: ${auditBadges.join(' / ')}. Tighten thresholds before using alerts.`;
+    }
+
+    function profileSaveMessage(instrument) {
+      const auditBadges = instrumentAuditBadges(instrument);
+      if (!auditBadges.length) return `Saved profile for ${instrument.symbol}.`;
+      return `Saved review rule for ${instrument.symbol}. Scanner context is ${auditBadges.join(' / ')}.`;
+    }
+
+    function currentProfileDraft() {
+      return {
+        rsi_buy_threshold: Number(el('profile-rsi-buy').value),
+        score_threshold: Number(el('profile-score-threshold').value),
+        volume_multiplier: Number(el('profile-volume-multiplier').value),
+        use_orderbook_pressure: el('profile-use-orderbook').checked,
+        use_derivatives_confirm: el('profile-use-derivatives').checked,
+      };
+    }
+
+    function aggressiveProfileWarning(instrument, draft) {
+      if (!instrumentAuditBadges(instrument).length) return '';
+      const warnings = [];
+      if (draft.rsi_buy_threshold > 38) warnings.push(`RSI buy ${draft.rsi_buy_threshold.toFixed(1)}`);
+      if (draft.volume_multiplier < 1.2) warnings.push(`volume ${draft.volume_multiplier.toFixed(1)}x`);
+      if (draft.score_threshold < 65) warnings.push(`score ${draft.score_threshold.toFixed(0)}`);
+      if (!draft.use_orderbook_pressure && !draft.use_derivatives_confirm) warnings.push('no market confirm');
+      if (!warnings.length) return '';
+      return `Aggressive for review-only mode: ${warnings.join(', ')}. Consider tighter confirmation before saving alerts.`;
+    }
+
+    function refreshProfileGuard(instrument) {
+      if (!instrument) {
+        el('profile-save-button').textContent = 'Save Profile';
+        return;
+      }
+      const auditNote = profileAuditNote(instrument);
+      const aggressiveWarning = aggressiveProfileWarning(instrument, currentProfileDraft());
+      el('profile-save-button').textContent = instrumentAuditBadges(instrument).length ? 'Save Review Rule' : 'Save Profile';
+      el('profile-note').textContent = aggressiveWarning
+        || (instrument.capabilities.has_realtime_feed
+          ? `This symbol can be evaluated against live candles now via ${instrument.runtime?.data_source || 'the active feed'}.`
+          : auditNote || `This symbol is running in scanner mode via ${instrument.runtime?.data_source || 'a watch-only feed'}.`);
+    }
+
+    function renderProfileEditor(instrument, profile = null) {
+      state.activeInstrument = instrument;
+      state.activeProfile = profile;
+      el('profile-selected-symbol').textContent = instrument ? `${instrument.symbol} · ${instrument.name} · ${instrument.exchange}` : 'Select an instrument to configure user thresholds.';
+      el('instrument-open-live-button').disabled = !(instrument && instrument.capabilities.has_realtime_feed);
+      el('profile-use-watch-button').disabled = !instrument;
+      el('profile-save-button').disabled = !instrument;
+      el('profile-refresh-button').disabled = !instrument;
+
+      if (!instrument) {
+        el('profile-capabilities').innerHTML = '';
+        el('profile-note').textContent = 'Profiles are saved per symbol. Live evaluation is available only when candle data exists.';
+        el('profile-save-button').textContent = 'Save Profile';
+        ['profile-enabled', 'profile-rsi-buy', 'profile-rsi-sell', 'profile-volume-multiplier', 'profile-score-threshold', 'profile-use-orderbook', 'profile-orderbook-threshold', 'profile-use-derivatives', 'profile-derivatives-threshold'].forEach(id => {
+          const node = el(id);
+          if (node.type === 'checkbox') node.checked = false;
+          else node.value = '';
+        });
+        return;
+      }
+
+      const auditBadges = instrumentAuditBadges(instrument);
+      el('profile-capabilities').innerHTML = [
+        `<span class="metric-pill">${instrument.market_type}</span>`,
+        `<span class="metric-pill">${instrument.quote_currency}</span>`,
+        `<span class="metric-pill">${instrument.capabilities.has_realtime_feed ? 'live feed' : 'watch only'}</span>`,
+        `<span class="metric-pill">${instrument.runtime?.data_source || 'pending source'}</span>`,
+        `<span class="metric-pill">${instrument.runtime?.market_session || 'session n/a'}</span>`,
+        `${instrument.runtime?.is_delayed ? '<span class="metric-pill">delayed</span>' : ''}`,
+        ...auditBadges.map(label => `<span class="metric-pill">${escapeHtml(label)}</span>`),
+        `${auditBadges.length ? '<span class="metric-pill">review-only</span>' : ''}`,
+        `<span class="metric-pill">${instrument.capabilities.has_orderbook_feed ? 'orderbook ready' : 'orderbook pending'}</span>`,
+        `<span class="metric-pill">${instrument.capabilities.has_derivatives_feed ? 'derivatives ready' : 'derivatives pending'}</span>`,
+      ].join('');
+
+      const activeProfile = profile || {
+        is_enabled: true,
+        rsi_buy_threshold: 35,
+        rsi_sell_threshold: 68,
+        volume_multiplier: 1.3,
+        score_threshold: 70,
+        use_orderbook_pressure: false,
+        orderbook_bias_threshold: 1.5,
+        use_derivatives_confirm: false,
+        derivatives_bias_threshold: 1.0,
+      };
+      el('profile-enabled').checked = !!activeProfile.is_enabled;
+      el('profile-rsi-buy').value = activeProfile.rsi_buy_threshold;
+      el('profile-rsi-sell').value = activeProfile.rsi_sell_threshold;
+      el('profile-volume-multiplier').value = activeProfile.volume_multiplier;
+      el('profile-score-threshold').value = activeProfile.score_threshold;
+      el('profile-use-orderbook').checked = !!activeProfile.use_orderbook_pressure;
+      el('profile-orderbook-threshold').value = activeProfile.orderbook_bias_threshold;
+      el('profile-use-derivatives').checked = !!activeProfile.use_derivatives_confirm;
+      el('profile-derivatives-threshold').value = activeProfile.derivatives_bias_threshold;
+      refreshProfileGuard(instrument);
+    }
+
+    function renderHeroInsights(rows, counts, source) {
+      const best = rows[0] || null;
+      state.topOpportunity = best;
+      el('hero-best-symbol').textContent = best ? best.symbol : '-';
+      el('hero-best-note').textContent = best
+        ? (state.signalFilters.auditOnly
+          ? `${best.auditLabel || 'audit queue'} review, score ${best.score}, ${best.tension.toLowerCase()}.`
+          : `${best.bias} bias, score ${best.score}, ${best.tension.toLowerCase()}.`)
+        : (state.signalFilters.auditOnly ? 'No audit candidate in the current tape.' : 'No active setup.');
+      el('hero-alert-note').textContent = counts.unread_notifications ? 'Unread alerts are waiting in the inbox.' : 'No unread alerts right now.';
+      el('selection-note').textContent = best
+        ? (state.signalFilters.auditOnly
+          ? `Top audit candidate is ${best.symbol}. Open it to inspect the chart.`
+          : `Top setup is ${best.symbol}. Open it to inspect the chart.`)
+        : 'Select an asset to inspect the chart.';
+      el('jump-best-button').textContent = state.signalFilters.auditOnly ? 'Open Audit Candidate' : 'Open Top Setup';
+      el('jump-best-button').disabled = !best;
+      el('hero-feed-note').textContent = signalFilterNarrative(source || state.dashboard?.source || null);
+    }
+
+    function detailAuditWarning(detail) {
+      const runtime = detail.instrument?.runtime || null;
+      if (!runtime || runtime.data_mode !== 'scanner') return null;
+      if (!(currentSignalPreset() === 'scanner_audit' || state.signalFilters.mode === 'scanner')) return null;
+
+      const warnings = [];
+      if (runtime.is_delayed) warnings.push(`delayed ${runtime.data_source} feed`);
+      if (!['regular', 'synthetic'].includes(runtime.market_session)) warnings.push(`${runtime.market_session} session`);
+      if (!warnings.length) return null;
+
+      return `Scanner audit active. ${detail.asset.symbol} is running on ${warnings.join(' and ')}. Treat BUY/SELL as review signals before acting.`;
+    }
+
+    function renderChart(detail) {
+      const candles = (detail.candles || []).slice(-30);
+      if (!candles.length) {
+        el('chart-box').innerHTML = '<div class="mini-note" style="padding:18px;">No candle data available.</div>';
+        return;
+      }
+
+      const width = 880;
+      const height = 340;
+      const left = 56;
+      const right = 20;
+      const top = 18;
+      const bottom = 52;
+      const priceMin = Math.min(...candles.map(row => Number(row.low_price)));
+      const priceMax = Math.max(...candles.map(row => Number(row.high_price)));
+      const volumeMax = Math.max(...candles.map(row => Number(row.volume) || 0), 1);
+      const chartWidth = width - left - right;
+      const chartHeight = height - top - bottom;
+      const volumeHeight = 60;
+      const bodyWidth = Math.max((chartWidth / candles.length) * 0.42, 5);
+      const step = chartWidth / candles.length;
+      const priceY = value => top + ((priceMax - value) / Math.max(priceMax - priceMin, 1)) * (chartHeight - volumeHeight);
+      const volumeY = value => top + chartHeight - ((value / volumeMax) * volumeHeight);
+      const xAt = index => left + step * index + step / 2;
+      const closeLine = candles.map((row, index) => `${xAt(index)},${priceY(Number(row.close_price)).toFixed(2)}`).join(' ');
+      const sma5 = candles.map(row => Number(row.close_price)).map((_, index, arr) => index >= 4 ? arr.slice(index - 4, index + 1).reduce((a, b) => a + b, 0) / 5 : null);
+      const sma20 = candles.map(row => Number(row.close_price)).map((_, index, arr) => index >= 19 ? arr.slice(index - 19, index + 1).reduce((a, b) => a + b, 0) / 20 : null);
+      const smaPath = values => values.map((value, index) => value == null ? null : `${index === values.findIndex(item => item != null) ? 'M' : 'L'} ${xAt(index).toFixed(2)} ${priceY(value).toFixed(2)}`).filter(Boolean).join(' ');
+      const gridLines = Array.from({ length: 4 }, (_, index) => {
+        const y = top + ((chartHeight - volumeHeight) / 3) * index;
+        const price = priceMax - ((priceMax - priceMin) / 3) * index;
+        return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="rgba(255,255,255,0.08)" stroke-dasharray="4 6" /><text x="8" y="${y + 4}" fill="#91a49c" font-size="11">${fmtNum(price)}</text>`;
+      }).join('');
+      const candleBars = candles.map((row, index) => {
+        const x = xAt(index);
+        const open = Number(row.open_price);
+        const close = Number(row.close_price);
+        const high = Number(row.high_price);
+        const low = Number(row.low_price);
+        const color = close >= open ? '#67f0b0' : '#ff7b7b';
+        const bodyTop = priceY(Math.max(open, close));
+        const bodyBottom = priceY(Math.min(open, close));
+        const bodyHeight = Math.max(bodyBottom - bodyTop, 2);
+        const volumeTop = volumeY(Number(row.volume) || 0);
+        return `<line x1="${x}" y1="${priceY(high)}" x2="${x}" y2="${priceY(low)}" stroke="${color}" stroke-width="1.5" /><rect x="${x - bodyWidth / 2}" y="${bodyTop}" width="${bodyWidth}" height="${bodyHeight}" rx="2" fill="${color}" fill-opacity="0.9" /><rect x="${x - bodyWidth / 2}" y="${volumeTop}" width="${bodyWidth}" height="${top + chartHeight - volumeTop}" fill="${color}" fill-opacity="0.22" />`;
+      }).join('');
+      const labels = candles.filter((_, index) => index % Math.max(Math.floor(candles.length / 5), 1) === 0).map((row, index) => {
+        const originalIndex = candles.findIndex(item => item.candle_time === row.candle_time && item.open_price === row.open_price);
+        return `<text x="${xAt(originalIndex)}" y="${height - 12}" text-anchor="middle" fill="#91a49c" font-size="10">${fmtTime(row.candle_time)}</text>`;
+      }).join('');
+
+      el('chart-box').innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Candlestick chart for ${escapeHtml(detail.asset.symbol)}"><defs><linearGradient id="closeGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffb071" stop-opacity="0.95" /><stop offset="100%" stop-color="#ff8f3d" stop-opacity="0.15" /></linearGradient></defs><rect x="0" y="0" width="${width}" height="${height}" rx="18" fill="#09120f" />${gridLines}${candleBars}<polyline fill="none" stroke="url(#closeGlow)" stroke-width="2" points="${closeLine}" /><path d="${smaPath(sma5)}" fill="none" stroke="#ffd36c" stroke-width="1.8" stroke-linecap="round" /><path d="${smaPath(sma20)}" fill="none" stroke="#7fd8ff" stroke-width="1.8" stroke-linecap="round" />${labels}</svg>`;
+    }
+
+    function detailAuditWarning(detail) {
+      const runtime = detail.instrument?.runtime || null;
+      if (!runtime || runtime.data_mode !== 'scanner') return null;
+      if (!(currentSignalPreset() === 'scanner_audit' || state.signalFilters.mode === 'scanner')) return null;
+
+      const warnings = [];
+      if (runtime.is_delayed) warnings.push(`delayed ${runtime.data_source} feed`);
+      if (!['regular', 'synthetic'].includes(runtime.market_session)) warnings.push(`${runtime.market_session} session`);
+      if (!warnings.length) return null;
+
+      return `Scanner audit active. ${detail.asset.symbol} is running on ${warnings.join(' and ')}. Treat BUY/SELL as review signals before acting.`;
+    }
+
+    function detailAuditBadges(detail) {
+      const runtime = detail.instrument?.runtime || null;
+      if (!runtime || runtime.data_mode !== 'scanner') return [];
+      if (!(currentSignalPreset() === 'scanner_audit' || state.signalFilters.mode === 'scanner')) return [];
+
+      const badges = [];
+      if (runtime.is_delayed) badges.push('delayed');
+      if (runtime.market_session === 'post') badges.push('post-market');
+      else if (runtime.market_session === 'pre') badges.push('pre-market');
+      else if (runtime.market_session === 'closed') badges.push('closed-session');
+      if (badges.length) badges.push('review before action');
+      return badges;
+    }
+
+    function detailSignalAuditLabel(detail, row) {
+      if (!detailAuditWarning(detail)) return '';
+      if (row.notification_delivery === 'suppressed') return 'audit review';
+      if (row.notification_delivery_reason && row.notification_delivery_reason.startsWith('scanner_')) return 'audit review';
+      return 'audit context';
+    }
+
+    function detailSignalDeliverySummary(detail, row) {
+      const parts = [row.notification_delivery || 'pending'];
+      const summarizedReason = summarizeScannerAuditReason(row.notification_delivery_reason) || row.notification_delivery_reason;
+      const auditLabel = detailSignalAuditLabel(detail, row);
+      if (summarizedReason) parts.push(summarizedReason);
+      if (auditLabel) parts.push(auditLabel);
+      return parts.map(part => escapeHtml(part)).join(' / ');
     }
 
     function renderDetail(detail) {
-      el('selected-asset').textContent = `${detail.asset.symbol} / ${detail.interval_type || 'default'}`;
+      state.detail = detail;
       const snapshot = detail.snapshot || {};
-      const summary = [['Price', fmtNum(detail.asset.last_price)], ['Change', `<span class="${detail.asset.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(detail.asset.change_rate)}</span>`], ['RSI 14', snapshot.rsi14 == null ? '-' : snapshot.rsi14.toFixed(1)], ['SMA 5', snapshot.sma5 == null ? '-' : fmtNum(snapshot.sma5)], ['SMA 20', snapshot.sma20 == null ? '-' : fmtNum(snapshot.sma20)]];
-      el('asset-summary').innerHTML = summary.map(([label, value]) => `<div class="summary-item"><div class="muted">${label}</div><strong>${value}</strong></div>`).join('');
-      el('candle-body').innerHTML = detail.candles.length ? detail.candles.slice(-8).reverse().map(row => `<tr><td>${fmtTime(row.candle_time)}</td><td>${fmtNum(row.open_price)}</td><td>${fmtNum(row.close_price)}</td><td>${fmtNum(row.high_price)}</td><td>${fmtNum(row.low_price)}</td><td>${fmtNum(row.volume)}</td></tr>`).join('') : '<tr><td colspan="6" class="muted">No candle data.</td></tr>';
-      el('asset-signal-body').innerHTML = detail.signals.length ? detail.signals.map(row => `<tr><td>${fmtTime(row.created_at)}</td><td class="${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}</td><td>${row.strategy_name}</td><td>${row.score.toFixed(1)}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">No asset signals.</td></tr>';
+      const latestSignal = detail.signals?.[0] || null;
+      const trendUp = snapshot.sma5 != null && snapshot.sma20 != null && snapshot.sma5 > snapshot.sma20;
+      const opportunityBias = latestSignal?.signal_type || (trendUp ? 'BUY' : 'WATCH');
+      const readout = deriveSetupReadout(detail);
+      const auditWarning = detailAuditWarning(detail);
+      if (detail.profile_evaluation) {
+        readout.push({
+          label: 'Custom profile',
+          value: `${detail.profile_evaluation.status} · ${detail.profile_evaluation.reason}`,
+          tone: detail.profile_evaluation.status === 'BUY' ? 'buy' : detail.profile_evaluation.status === 'SELL' ? 'sell' : 'muted',
+        });
+      }
+
+      el('selected-asset').textContent = `${detail.asset.symbol} / ${detail.interval_type || 'default'}`;
+      el('runtime-selected-asset').textContent = detail.asset.symbol;
+      el('spotlight-symbol').textContent = detail.asset.symbol;
+      el('spotlight-narrative').textContent = latestSignal ? `${latestSignal.strategy_name} fired recently. ${latestSignal.reason}` : 'No fresh signal. Use the chart and indicators to monitor structure.';
+      el('spotlight-trend').className = `signal-chip ${trendUp ? 'buy' : 'neutral'}`;
+      el('spotlight-trend').textContent = trendUp ? 'Trend up' : 'Trend mixed';
+      el('spotlight-signal').className = `signal-chip ${opportunityBias === 'BUY' ? 'buy' : opportunityBias === 'SELL' ? 'sell' : 'neutral'}`;
+      el('spotlight-signal').textContent = latestSignal ? `${latestSignal.signal_type} / ${latestSignal.strategy_name}` : 'No active signal';
+      el('spotlight-interval').textContent = detail.interval_fallback_applied ? `Resolved ${detail.interval_type} (requested ${detail.requested_interval_type})` : `Interval ${detail.interval_type || 'default'}`;
+      el('detail-audit-warning').style.display = auditWarning ? 'block' : 'none';
+      el('detail-audit-warning').textContent = auditWarning || '';
+
+      const summary = [
+        ['Last price', fmtNum(detail.asset.last_price)],
+        ['Change', `<span class="${detail.asset.change_rate >= 0 ? 'positive' : 'negative'}">${fmtPct(detail.asset.change_rate)}</span>`],
+        ['Mode', detail.instrument?.runtime ? `${detail.instrument.runtime.data_mode} / ${detail.instrument.runtime.data_source}` : '-'],
+        ['RSI 14', snapshot.rsi14 == null ? '-' : snapshot.rsi14.toFixed(1)],
+        ['Session', detail.instrument?.runtime ? `${detail.instrument.runtime.market_session}${detail.instrument.runtime.is_delayed ? ' / delayed' : ''}` : '-'],
+        ['SMA spread', snapshot.sma5 == null || snapshot.sma20 == null ? '-' : fmtNum(snapshot.sma5 - snapshot.sma20)],
+      ];
+      el('asset-summary').innerHTML = summary.map(([label, value]) => `<div class="summary-item"><div class="kicker">${label}</div><strong>${value}</strong></div>`).join('');
+
+      el('chart-caption').textContent = detail.interval_fallback_applied
+        ? `Requested ${detail.requested_interval_type}, served ${detail.interval_type} because that is the active stream.`
+        : detail.instrument?.capabilities?.has_realtime_feed
+          ? 'Latest candles with moving averages and volume pressure.'
+          : 'Scanner-mode daily candles with moving averages and volume pressure.';
+      const auditBadges = detailAuditBadges(detail);
+      el('chart-badges').innerHTML = [
+        `<div class="metric-pill">${detail.candles.length} candles</div>`,
+        `<div class="metric-pill">${latestSignal ? `${latestSignal.signal_type} ${round(latestSignal.score || 0, 0)}` : 'No live trigger'}</div>`,
+        `<div class="metric-pill">${snapshot.bollinger_upper && snapshot.bollinger_lower ? `Band ${(snapshot.bollinger_upper - snapshot.bollinger_lower).toFixed(0)}` : 'Band pending'}</div>`,
+        auditWarning ? '<div class="metric-pill">scanner audit</div>' : '',
+        ...auditBadges.map(label => `<div class="metric-pill">${escapeHtml(label)}</div>`),
+      ].join('');
+
+      renderChart(detail);
+      el('candle-body').innerHTML = detail.candles.length ? detail.candles.slice(-8).reverse().map(row => `<tr><td>${fmtDateTime(row.candle_time)}</td><td>${fmtNum(row.open_price)}</td><td>${fmtNum(row.close_price)}</td><td>${fmtNum(row.high_price)}</td><td>${fmtNum(row.low_price)}</td><td>${fmtNum(row.volume)}</td></tr>`).join('') : '<tr><td colspan="6" class="muted">No candle data.</td></tr>';
+      el('asset-signal-body').innerHTML = detail.signals.length ? detail.signals.map(row => {
+        const auditLabel = detailSignalAuditLabel(detail, row);
+        return `<tr><td>${fmtDateTime(row.created_at)}</td><td class="${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}<div class="mini-note">${detailSignalDeliverySummary(detail, row)}</div></td><td>${escapeHtml(row.strategy_name)}</td><td>${round(row.score, 0)}${row.notification_count ? `<div class="mini-note">${row.notification_count} notified</div>` : ''}${auditLabel ? '<div class="mini-note">review before action</div>' : ''}</td></tr>`;
+      }).join('') : '<tr><td colspan="4" class="muted">No asset signals.</td></tr>';
+      el('setup-readout').innerHTML = readout.map(item => `<div style="padding:12px 0;border-bottom:1px solid var(--line);"><div class="kicker">${escapeHtml(item.label)}</div><strong class="${item.tone}">${escapeHtml(item.value)}</strong></div>`).join('');
+      if (detail.instrument) {
+        renderProfileEditor(detail.instrument, detail.user_signal_profile || null);
+      }
     }
 
     async function loadBootstrap() {
@@ -252,17 +995,32 @@
       state.appMeta = data.app || state.appMeta;
       state.endpoints = data.endpoints;
       state.assets = data.catalog.assets;
-      renderSession(data.session); renderRuntimeMeta(data.app, data.source); renderAssetOptions();
+      renderSession(data.session);
+      renderRuntimeMeta(data.app, data.source);
+      renderAssetOptions();
     }
 
     async function loadDashboard() {
-      const data = await requestJson(state.endpoints.dashboard);
-      renderSession(data.session); renderRuntimeMeta(state.appMeta, data.source); renderOverview(data.overview); renderSignals(data.signals); renderWatchlist(data.watchlist); renderNotifications(data.notifications);
+      const data = await requestJson(dashboardUrl());
+      state.dashboard = data;
+      const ranked = buildRankedOverview(data.overview);
+      renderSession(data.session);
+      renderRuntimeMeta(state.appMeta, data.source);
+      renderSignals(data.signals);
+      renderWatchlist(data.watchlist);
+      renderNotifications(data.notifications);
+      renderOpportunityCards(ranked);
+      renderOverview(ranked);
+      renderHeroInsights(ranked, data.counts, data.source);
       el('web-enabled').checked = data.notification_settings?.web_enabled ?? true;
       el('email-enabled').checked = data.notification_settings?.email_enabled ?? false;
-      el('asset-count').textContent = data.counts.assets; el('signal-count').textContent = data.counts.recent_signals; el('notification-count').textContent = data.counts.notifications; el('watch-count').textContent = data.counts.watchlist; el('unread-count').textContent = data.counts.unread_notifications;
-      if (!state.selectedSymbol && data.overview.length) state.selectedSymbol = data.overview[0].symbol;
-      if (state.selectedSymbol) { await loadDetail(state.selectedSymbol); renderOverview(data.overview); }
+      el('asset-count').textContent = data.counts.assets;
+      el('signal-count').textContent = data.counts.recent_signals;
+      el('notification-count').textContent = data.counts.notifications;
+      el('watch-count').textContent = data.counts.watchlist;
+      if (!state.selectedSymbol && ranked.length) state.selectedSymbol = ranked[0].symbol;
+      syncUrlFromState();
+      if (state.selectedSymbol) await loadDetail(state.selectedSymbol, false);
     }
 
     async function loadReleaseStatus() {
@@ -270,27 +1028,140 @@
       renderReleaseStatus(data);
     }
 
-    async function loadDetail(symbol) { state.selectedSymbol = symbol; const data = await requestJson(assetUrl(symbol)); renderDetail(data); }
-    async function refreshAll() { try { await loadBootstrap(); await loadDashboard(); } catch (error) { msg(error.message, true); } }
-    function scheduleRefresh() { if (state.refreshTimer) return; state.refreshTimer = setTimeout(async () => { state.refreshTimer = null; await refreshAll(); }, 350); }
+    async function loadDetail(symbol, syncBoard = true) {
+      state.selectedSymbol = symbol;
+      syncUrlFromState();
+      const data = await requestJson(assetUrl(symbol));
+      renderDetail(data);
+      if (syncBoard && state.dashboard?.overview) {
+        const ranked = buildRankedOverview(state.dashboard.overview);
+        renderOpportunityCards(ranked);
+        renderOverview(ranked);
+      }
+    }
+
+    async function loadInstrumentSearch(query = '', marketType = '') {
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (marketType) params.set('market_type', marketType);
+      const path = `${state.endpoints.instrument_search}${params.toString() ? `?${params.toString()}` : ''}`;
+      const rows = await requestJson(path);
+      renderInstrumentSearch(rows);
+      return rows;
+    }
+
+    async function loadInstrument(symbol, { preferLiveDetail = true } = {}) {
+      const instrument = await requestJson(instrumentDetailUrl(symbol));
+      renderProfileEditor(instrument, null);
+      if (state.token) {
+        try {
+          const profile = await requestJson(signalProfileUrl(symbol));
+          renderProfileEditor(instrument, profile);
+        } catch (_) {
+          renderProfileEditor(instrument, null);
+        }
+      }
+      if (preferLiveDetail || !instrument.capabilities.has_realtime_feed) {
+        await loadDetail(symbol);
+      }
+      return instrument;
+    }
+
+    async function saveSignalProfile() {
+      if (!state.activeInstrument) {
+        msg('Select an instrument first.', true);
+        return;
+      }
+      if (!state.token) {
+        msg('Sign in to save custom profiles.', true);
+        return;
+      }
+      const payload = {
+        is_enabled: el('profile-enabled').checked,
+        rsi_buy_threshold: Number(el('profile-rsi-buy').value),
+        rsi_sell_threshold: Number(el('profile-rsi-sell').value),
+        volume_multiplier: Number(el('profile-volume-multiplier').value),
+        score_threshold: Number(el('profile-score-threshold').value),
+        use_orderbook_pressure: el('profile-use-orderbook').checked,
+        orderbook_bias_threshold: Number(el('profile-orderbook-threshold').value),
+        use_derivatives_confirm: el('profile-use-derivatives').checked,
+        derivatives_bias_threshold: Number(el('profile-derivatives-threshold').value),
+      };
+      const profile = await requestJson(signalProfileUrl(state.activeInstrument.symbol), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      renderProfileEditor(state.activeInstrument, profile);
+      msg(profileSaveMessage(state.activeInstrument));
+      await loadDetail(state.activeInstrument.symbol);
+      await loadDashboard();
+    }
+
+    async function refreshAll() {
+      try {
+        await loadBootstrap();
+        await loadDashboard();
+        await loadInstrumentSearch(el('instrument-search-query').value, el('instrument-market-filter').value);
+      } catch (error) {
+        msg(error.message, true);
+      }
+    }
+
+    function scheduleRefresh() {
+      if (state.refreshTimer) return;
+      state.refreshTimer = setTimeout(async () => {
+        state.refreshTimer = null;
+        await refreshAll();
+      }, 350);
+    }
 
     function connectSocket() {
       if (!state.wsUrl) return;
-      if (state.socket) try { state.socket.close(); } catch (_) {}
+      if (state.socket) {
+        try { state.socket.close(); } catch (_) {}
+      }
       clearInterval(state.heartbeat);
       state.socket = new WebSocket(state.wsUrl);
       el('socket-status').textContent = 'Connecting';
-      state.socket.onopen = () => { el('socket-status').textContent = 'Live'; state.heartbeat = setInterval(() => { if (state.socket?.readyState === WebSocket.OPEN) state.socket.send('ping'); }, 3000); };
+      state.socket.onopen = () => {
+        el('socket-status').textContent = 'Live';
+        state.heartbeat = setInterval(() => {
+          if (state.socket?.readyState === WebSocket.OPEN) state.socket.send('ping');
+        }, 3000);
+      };
       state.socket.onmessage = () => scheduleRefresh();
-      state.socket.onclose = () => { clearInterval(state.heartbeat); el('socket-status').textContent = 'Reconnecting'; setTimeout(connectSocket, 1800); };
+      state.socket.onclose = () => {
+        clearInterval(state.heartbeat);
+        el('socket-status').textContent = 'Reconnecting';
+        setTimeout(connectSocket, 1800);
+      };
     }
 
     async function login() {
-      try { const data = await requestJson(state.endpoints.login, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('login-username').value, password: el('login-password').value, client_name: 'web-dashboard' }) }); storeTokens(data); msg(`Signed in as ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
+      try {
+        const data = await requestJson(state.endpoints.login, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('login-username').value, password: el('login-password').value, client_name: 'web-dashboard' }) });
+        storeTokens(data);
+        msg(`Signed in as ${data.user.username}.`);
+        await refreshAll();
+        connectSocket();
+      } catch (error) {
+        msg(error.message, true);
+      }
     }
+
     async function signup() {
-      try { const data = await requestJson(state.endpoints.signup, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('signup-username').value, email: el('signup-email').value, password: el('signup-password').value, client_name: 'web-dashboard' }) }); storeTokens(data); msg(`Created ${data.user.username}.`); await refreshAll(); connectSocket(); } catch (error) { msg(error.message, true); }
+      try {
+        const data = await requestJson(state.endpoints.signup, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: el('signup-username').value, email: el('signup-email').value, password: el('signup-password').value, client_name: 'web-dashboard' }) });
+        storeTokens(data);
+        msg(`Created ${data.user.username}.`);
+        await refreshAll();
+        connectSocket();
+      } catch (error) {
+        msg(error.message, true);
+      }
     }
+
     async function refreshSession() {
       if (!state.refreshToken) return false;
       try {
@@ -306,11 +1177,60 @@
         return false;
       }
     }
-    async function logout() { try { if (state.refreshToken) { await fetch(httpUrl(state.endpoints.logout), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: state.refreshToken }) }); } } finally { clearTokens(); msg('Signed out.'); await refreshAll(); } }
-    async function addWatch() { try { await requestJson(state.endpoints.watchlist, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: el('watch-symbol').value }) }); await loadDashboard(); msg(`Added ${el('watch-symbol').value}.`); } catch (error) { msg(error.message, true); } }
-    async function saveSettings() { try { await requestJson(state.endpoints.notification_settings, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web_enabled: el('web-enabled').checked, email_enabled: el('email-enabled').checked }) }); await loadDashboard(); msg('Settings saved.'); } catch (error) { msg(error.message, true); } }
-    async function removeWatch(symbol) { try { await requestJson(`${state.endpoints.watchlist}/${encodeURIComponent(symbol)}`, { method: 'DELETE' }); await loadDashboard(); msg(`Removed ${symbol}.`); } catch (error) { msg(error.message, true); } }
-    async function readNotification(id) { try { await requestJson(`${state.endpoints.notifications}/${id}/read`, { method: 'PATCH' }); await loadDashboard(); msg('Notification marked as read.'); } catch (error) { msg(error.message, true); } }
+
+    async function logout() {
+      try {
+        if (state.refreshToken) {
+          await fetch(httpUrl(state.endpoints.logout), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: state.refreshToken }) });
+        }
+      } finally {
+        clearTokens();
+        msg('Signed out.');
+        await refreshAll();
+      }
+    }
+
+    async function addWatch(symbolOverride = null) {
+      try {
+        const symbol = symbolOverride || el('watch-symbol').value;
+        await requestJson(state.endpoints.watchlist, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol }) });
+        await loadDashboard();
+        msg(watchlistAddMessage(symbol));
+      } catch (error) {
+        msg(error.message, true);
+      }
+    }
+
+    async function saveSettings() {
+      try {
+        await requestJson(state.endpoints.notification_settings, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ web_enabled: el('web-enabled').checked, email_enabled: el('email-enabled').checked }) });
+        await loadDashboard();
+        msg('Settings saved.');
+      } catch (error) {
+        msg(error.message, true);
+      }
+    }
+
+    async function removeWatch(symbol) {
+      try {
+        await requestJson(`${state.endpoints.watchlist}/${encodeURIComponent(symbol)}`, { method: 'DELETE' });
+        await loadDashboard();
+        msg(`Removed ${symbol}.`);
+      } catch (error) {
+        msg(error.message, true);
+      }
+    }
+
+    async function readNotification(id) {
+      try {
+        await requestJson(`${state.endpoints.notifications}/${id}/read`, { method: 'PATCH' });
+        await loadDashboard();
+        msg('Notification marked as read.');
+      } catch (error) {
+        msg(error.message, true);
+      }
+    }
+
     async function installApp() {
       if (!state.installPrompt) return;
       state.installPrompt.prompt();
@@ -328,14 +1248,122 @@
       if (state.release) renderReleaseStatus(state.release);
     }
 
-    el('login-button').addEventListener('click', login); el('signup-button').addEventListener('click', signup); el('logout-button').addEventListener('click', logout); el('refresh-button').addEventListener('click', refreshAll); el('watch-add-button').addEventListener('click', addWatch); el('settings-save-button').addEventListener('click', saveSettings); el('install-button').addEventListener('click', installApp);
-    el('overview-body').addEventListener('click', async event => { const row = event.target.closest('tr[data-symbol]'); if (!row) return; await loadDetail(row.dataset.symbol); await loadDashboard(); });
-    el('watch-body').addEventListener('click', async event => { const button = event.target.closest('.watch-remove'); if (button) await removeWatch(button.dataset.symbol); });
-    el('notification-body').addEventListener('click', async event => { const button = event.target.closest('.notif-read'); if (button) await readNotification(button.dataset.id); });
-    window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); state.installPrompt = event; renderInstallState(); });
-    window.addEventListener('appinstalled', () => { state.installPrompt = null; renderInstallState(); });
+    function syncSignalFiltersFromUi() {
+      state.signalFilters.delivery = el('signal-filter-delivery').value;
+      state.signalFilters.mode = el('signal-filter-mode').value;
+      state.signalFilters.includeSuppressed = el('signal-filter-include-suppressed').checked;
+      state.signalFilters.auditOnly = el('signal-filter-audit-only').checked;
+      syncUrlFromState();
+    }
 
-    (async () => { renderInstallState(); await registerServiceWorker(); await refreshAll(); await loadReleaseStatus(); connectSocket(); })();
+    readStateFromUrl();
+    applySignalFiltersToUi();
+
+    el('login-button').addEventListener('click', login);
+    el('signup-button').addEventListener('click', signup);
+    el('logout-button').addEventListener('click', logout);
+    el('refresh-button').addEventListener('click', refreshAll);
+    el('session-refresh-button').addEventListener('click', refreshAll);
+    el('watch-add-button').addEventListener('click', addWatch);
+    el('settings-save-button').addEventListener('click', saveSettings);
+    el('install-button').addEventListener('click', installApp);
+    el('instrument-search-button').addEventListener('click', async () => {
+      await loadInstrumentSearch(el('instrument-search-query').value, el('instrument-market-filter').value);
+    });
+    el('instrument-reset-button').addEventListener('click', async () => {
+      el('instrument-search-query').value = '';
+      el('instrument-market-filter').value = '';
+      await loadInstrumentSearch();
+    });
+    el('instrument-open-live-button').addEventListener('click', async () => {
+      if (state.activeInstrument?.capabilities.has_realtime_feed) {
+        await loadDetail(state.activeInstrument.symbol);
+      }
+    });
+    el('profile-save-button').addEventListener('click', saveSignalProfile);
+    el('profile-refresh-button').addEventListener('click', async () => {
+      if (state.activeInstrument) await loadInstrument(state.activeInstrument.symbol, { preferLiveDetail: false });
+    });
+    ['profile-rsi-buy', 'profile-volume-multiplier', 'profile-score-threshold', 'profile-use-orderbook', 'profile-use-derivatives'].forEach(id => {
+      el(id).addEventListener('input', () => refreshProfileGuard(state.activeInstrument));
+      el(id).addEventListener('change', () => refreshProfileGuard(state.activeInstrument));
+    });
+    el('profile-use-watch-button').addEventListener('click', async () => {
+      if (!state.activeInstrument) return;
+      if (!state.token) {
+        msg('Sign in to add watchlist items.', true);
+        return;
+      }
+      await addWatch(state.activeInstrument.symbol);
+    });
+    el('jump-best-button').addEventListener('click', async () => { if (state.topOpportunity) await loadDetail(state.topOpportunity.symbol); });
+    el('signal-filter-presets').addEventListener('click', async event => {
+      const button = event.target.closest('[data-preset]');
+      if (!button) return;
+      applySignalPreset(button.dataset.preset);
+      await loadDashboard();
+    });
+    el('signal-filter-delivery').addEventListener('change', async () => {
+      syncSignalFiltersFromUi();
+      await loadDashboard();
+    });
+    el('signal-filter-mode').addEventListener('change', async () => {
+      syncSignalFiltersFromUi();
+      await loadDashboard();
+    });
+    el('signal-filter-include-suppressed').addEventListener('change', async () => {
+      syncSignalFiltersFromUi();
+      await loadDashboard();
+    });
+    el('signal-filter-audit-only').addEventListener('change', async () => {
+      syncSignalFiltersFromUi();
+      await loadDashboard();
+    });
+    el('instrument-search-results').addEventListener('click', async event => {
+      const row = event.target.closest('[data-symbol]');
+      if (!row) return;
+      await loadInstrument(row.dataset.symbol);
+    });
+    el('opportunity-grid').addEventListener('click', async event => {
+      const card = event.target.closest('[data-symbol]');
+      if (!card) return;
+      await loadDetail(card.dataset.symbol);
+    });
+    el('overview-body').addEventListener('click', async event => {
+      const row = event.target.closest('[data-symbol]');
+      if (!row) return;
+      await loadDetail(row.dataset.symbol);
+    });
+    el('watch-body').addEventListener('click', async event => {
+      const button = event.target.closest('.watch-remove');
+      if (button) await removeWatch(button.dataset.symbol);
+    });
+    el('notification-body').addEventListener('click', async event => {
+      const button = event.target.closest('.notif-read');
+      if (button) await readNotification(button.dataset.id);
+    });
+    window.addEventListener('beforeinstallprompt', event => {
+      event.preventDefault();
+      state.installPrompt = event;
+      renderInstallState();
+    });
+    window.addEventListener('popstate', async () => {
+      readStateFromUrl();
+      applySignalFiltersToUi();
+      await refreshAll();
+    });
+    window.addEventListener('appinstalled', () => {
+      state.installPrompt = null;
+      renderInstallState();
+    });
+
+    (async () => {
+      renderInstallState();
+      await registerServiceWorker();
+      await refreshAll();
+      await loadReleaseStatus();
+      connectSocket();
+    })();
   </script>
 </body>
 </html>

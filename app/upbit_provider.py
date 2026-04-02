@@ -182,6 +182,16 @@ class UpbitMarketStream:
                         last_price=candles[-1]['close_price'],
                         updated_at=candles[-1]['candle_time'],
                     )
+                    db.upsert_instrument_runtime_state(
+                        symbol,
+                        data_mode='realtime',
+                        data_source='upbit',
+                        interval_type=self.interval_type,
+                        market_session='continuous',
+                        is_delayed=False,
+                        as_of=candles[-1]['candle_time'],
+                        updated_at=candles[-1]['candle_time'],
+                    )
                     await evaluate_symbol_and_broadcast(symbol, self.broadcaster, interval_type=self.interval_type)
         self._status['last_message_at'] = db.isoformat(db.utc_now())
 
@@ -257,6 +267,16 @@ class UpbitMarketStream:
             change_rate=ticker['change_rate'],
             updated_at=ticker['updated_at'],
         )
+        db.upsert_instrument_runtime_state(
+            ticker['symbol'],
+            data_mode='realtime',
+            data_source='upbit',
+            interval_type=self.interval_type,
+            market_session='continuous',
+            is_delayed=False,
+            as_of=ticker['updated_at'],
+            updated_at=ticker['updated_at'],
+        )
         await self._push_market_snapshot(
             symbol=ticker['symbol'],
             price=ticker['price'],
@@ -270,6 +290,16 @@ class UpbitMarketStream:
         db.update_asset_price(
             candle['symbol'],
             last_price=candle['close_price'],
+            updated_at=candle['candle_time'],
+        )
+        db.upsert_instrument_runtime_state(
+            candle['symbol'],
+            data_mode='realtime',
+            data_source='upbit',
+            interval_type=self.interval_type,
+            market_session='continuous',
+            is_delayed=False,
+            as_of=candle['candle_time'],
             updated_at=candle['candle_time'],
         )
         await evaluate_symbol_and_broadcast(candle['symbol'], self.broadcaster, interval_type=self.interval_type)

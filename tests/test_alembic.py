@@ -17,4 +17,18 @@ def test_alembic_upgrade_creates_schema(tmp_path) -> None:
 
     inspector = inspect(create_engine(f"sqlite:///{db_path.resolve().as_posix()}"))
     tables = set(inspector.get_table_names())
-    assert {'assets', 'candles', 'strategies', 'signals', 'users', 'refresh_sessions', 'auth_action_tokens', 'watchlists', 'notification_settings', 'notifications'} <= tables
+    assert {
+        'assets',
+        'instruments',
+        'instrument_runtime_state',
+        'candles',
+        'strategies',
+        'signals',
+        'users',
+        'refresh_sessions',
+        'auth_action_tokens',
+        'watchlists',
+        'notification_settings',
+        'notifications',
+        'user_signal_profiles',
+    } <= tables

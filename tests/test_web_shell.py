@@ -41,6 +41,37 @@ def test_web_shell_routes_are_served(tmp_path, monkeypatch) -> None:
         assert index_response.status_code == 200
         assert 'Install App' in index_response.text
         assert 'Secure Context' in index_response.text
+        assert 'signal-filter-delivery' in index_response.text
+        assert 'signal-filter-audit-only' in index_response.text
+        assert 'signal-filter-presets' in index_response.text
+        assert 'signal-filter-label' in index_response.text
+        assert 'hero-feed-preset' in index_response.text
+        assert 'detail-audit-warning' in index_response.text
+        assert 'Scanner audit active.' in index_response.text
+        assert 'scanner audit' in index_response.text
+        assert 'audit review' in index_response.text
+        assert 'Audit state' in index_response.text
+        assert 'detailSignalDeliverySummary' in index_response.text
+        assert 'post-market' in index_response.text
+        assert 'closed-session' in index_response.text
+        assert 'review before action' in index_response.text
+        assert 'Review-only scanner context' in index_response.text
+        assert 'Saved review rule for' in index_response.text
+        assert 'review-only' in index_response.text
+        assert 'Save Review Rule' in index_response.text
+        assert 'Aggressive for review-only mode' in index_response.text
+        assert 'audit watch' in index_response.text
+        assert 'Added audit watch for' in index_response.text
+        assert 'Open Audit Candidate' in index_response.text
+        assert 'Top audit candidate is' in index_response.text
+        assert 'No audit candidates in the current tape.' in index_response.text
+        assert 'Custom Tape' in index_response.text
+        assert 'data-tone="operator"' in index_response.text
+        assert 'SIGNAL_FILTER_PRESET_TONES' in index_response.text
+        assert 'signal_preset' in index_response.text
+        assert 'signal_audit_only' in index_response.text
+        assert 'history.replaceState' in index_response.text
+        assert "window.addEventListener('popstate'" in index_response.text
 
         assert manifest_response.status_code == 200
         assert 'Signal Flow Live' in manifest_response.text

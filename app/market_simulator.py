@@ -94,6 +94,16 @@ class MarketSimulator:
             change_rate=round(change_rate, 4),
             updated_at=db.isoformat(db.utc_now()),
         )
+        db.upsert_instrument_runtime_state(
+            symbol,
+            data_mode='realtime',
+            data_source='simulator',
+            interval_type=f'demo-{CANDLE_INTERVAL_SECONDS}s',
+            market_session='continuous',
+            is_delayed=False,
+            as_of=db.isoformat(candle_time),
+            updated_at=db.isoformat(db.utc_now()),
+        )
         db.upsert_candle(
             symbol=symbol,
             candle_time=db.isoformat(candle_time),
