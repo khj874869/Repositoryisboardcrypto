@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1a1210"/>
+      <stop offset="100%" stop-color="#2f2433"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #f8f2ea; }
+      .sub { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #e5d9d2; }
+      .panel { fill: rgba(247,241,232,.96); rx: 24; }
+      .warn { fill: #fff1e6; rx: 20; stroke: #ff8f3d; stroke-width: 2; }
+      .soft { fill: #f7fafc; rx: 18; }
+      .head { font: 700 22px 'Segoe UI', Arial, sans-serif; fill: #361d16; }
+      .body { font: 400 15px 'Segoe UI', Arial, sans-serif; fill: #57392d; }
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <text x="56" y="64" class="title">Portfolio Visual - Scanner Audit</text>
+  <text x="56" y="92" class="sub">Review-only market context for delayed or out-of-session scanner data</text>
+  <rect x="40" y="124" width="1200" height="590" class="panel"/>
+  <rect x="72" y="160" width="1136" height="96" class="warn"/>
+  <text x="98" y="198" class="head">Scanner audit active</text>
+  <text x="98" y="228" class="body">AAPL is running on delayed yahoo feed and post-market session. Treat BUY / SELL as review signals before acting.</text>
+  <rect x="72" y="286" width="380" height="378" class="soft"/>
+  <text x="98" y="324" class="head">Audit Candidate</text>
+  <text x="98" y="356" class="body">Symbol: AAPL</text>
+  <text x="98" y="384" class="body">Delivery: suppressed</text>
+  <text x="98" y="412" class="body">Reason: scanner_delayed_blocked</text>
+  <text x="98" y="440" class="body">Audit label: delayed</text>
+  <text x="98" y="468" class="body">Action: review before action</text>
+  <rect x="484" y="286" width="724" height="178" class="soft"/>
+  <text x="510" y="324" class="head">Audit Tape</text>
+  <rect x="510" y="344" width="670" height="40" fill="#fff6ec" rx="14"/>
+  <rect x="510" y="396" width="670" height="40" fill="#fff6ec" rx="14"/>
+  <text x="530" y="369" class="body">AAPL / suppressed / delayed / audit review</text>
+  <text x="530" y="421" class="body">MSFT / suppressed / closed-session / audit review</text>
+  <rect x="484" y="486" width="724" height="178" class="soft"/>
+  <text x="510" y="524" class="head">Why this matters</text>
+  <text x="510" y="556" class="body">The UI explains why a signal exists but should not be treated as immediate execution guidance.</text>
+  <text x="510" y="584" class="body">This is useful for operators who need diagnostic context, not just a BUY / SELL label.</text>
+</svg>

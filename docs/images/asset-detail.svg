@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#161716"/>
+      <stop offset="100%" stop-color="#243239"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #f8f4ec; }
+      .sub { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #d5dfdc; }
+      .panel { fill: rgba(247,241,232,.96); rx: 24; }
+      .soft { fill: #f7fafc; rx: 18; }
+      .head { font: 700 22px 'Segoe UI', Arial, sans-serif; fill: #102022; }
+      .body { font: 400 15px 'Segoe UI', Arial, sans-serif; fill: #1d3a41; }
+      .pill { fill: #102022; rx: 12; }
+      .pilltext { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #f8f4ec; }
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <text x="56" y="64" class="title">Portfolio Visual - Asset Detail</text>
+  <text x="56" y="92" class="sub">Single asset surface combining candles, indicators, runtime, signals, and user profile</text>
+  <rect x="40" y="124" width="1200" height="590" class="panel"/>
+  <text x="76" y="168" class="head">AAPL / scanner-1d</text>
+  <rect x="78" y="186" width="116" height="28" class="pill"/>
+  <text x="100" y="205" class="pilltext">scanner</text>
+  <rect x="206" y="186" width="116" height="28" class="pill"/>
+  <text x="232" y="205" class="pilltext">synthetic</text>
+  <rect x="334" y="186" width="116" height="28" class="pill"/>
+  <text x="364" y="205" class="pilltext">regular</text>
+  <rect x="76" y="236" width="760" height="286" class="soft"/>
+  <text x="102" y="270" class="body">Price chart</text>
+  <polyline points="106,452 180,426 254,436 328,386 402,398 476,348 550,360 624,304 698,328 772,286" fill="none" stroke="#ff8f3d" stroke-width="6" stroke-linecap="round"/>
+  <polyline points="106,472 180,456 254,446 328,430 402,418 476,408 550,388 624,374 698,362 772,350" fill="none" stroke="#1f7a8c" stroke-width="4" stroke-linecap="round"/>
+  <polyline points="106,492 180,488 254,480 328,474 402,466 476,452 550,446 624,432 698,424 772,414" fill="none" stroke="#58b368" stroke-width="4" stroke-linecap="round"/>
+  <rect x="864" y="236" width="340" height="124" class="soft"/>
+  <text x="890" y="270" class="head">Snapshot</text>
+  <text x="890" y="302" class="body">RSI 14: 54.8</text>
+  <text x="890" y="330" class="body">SMA spread: +2.1</text>
+  <text x="890" y="358" class="body">Mode: scanner / synthetic</text>
+  <rect x="864" y="382" width="340" height="140" class="soft"/>
+  <text x="890" y="416" class="head">Recent Signals</text>
+  <text x="890" y="448" class="body">BUY / Forced Buy / score 88</text>
+  <text x="890" y="476" class="body">Delivery: suppressed / delayed</text>
+  <rect x="76" y="548" width="1128" height="136" class="soft"/>
+  <text x="102" y="582" class="head">Custom Signal Profile</text>
+  <text x="102" y="614" class="body">RSI buy 35 / score threshold 70 / volume 1.3x</text>
+  <text x="102" y="642" class="body">Status: WATCH / Profile conditions are not fully aligned yet.</text>
+</svg>

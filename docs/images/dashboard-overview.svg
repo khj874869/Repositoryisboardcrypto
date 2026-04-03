@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#101919"/>
+      <stop offset="100%" stop-color="#1a2d35"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #f6f1e8; }
+      .sub { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #d8e0dd; }
+      .panel { fill: rgba(247,241,232,.95); rx: 24; }
+      .card { fill: rgba(255,255,255,.08); rx: 18; stroke: rgba(255,255,255,.08); }
+      .head { font: 700 22px 'Segoe UI', Arial, sans-serif; fill: #102022; }
+      .body { font: 400 15px 'Segoe UI', Arial, sans-serif; fill: #1d3a41; }
+      .dark { font: 600 15px 'Segoe UI', Arial, sans-serif; fill: #f6f1e8; }
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <text x="56" y="64" class="title">Portfolio Visual - Dashboard Overview</text>
+  <text x="56" y="92" class="sub">Market board, signal tape, watchlist, runtime meta in one operator-facing surface</text>
+  <rect x="40" y="124" width="360" height="250" class="card"/>
+  <text x="64" y="162" class="dark">Live Tape</text>
+  <rect x="64" y="182" width="312" height="42" fill="rgba(255,255,255,.08)" rx="14"/>
+  <rect x="64" y="236" width="312" height="42" fill="rgba(255,255,255,.08)" rx="14"/>
+  <rect x="64" y="290" width="312" height="42" fill="rgba(255,255,255,.08)" rx="14"/>
+  <text x="82" y="209" class="dark">BUY KRW-BTC / notified / 1</text>
+  <text x="82" y="263" class="dark">SELL AAPL / suppressed / delayed</text>
+  <text x="82" y="317" class="dark">BUY MSFT / no subscribers</text>
+  <rect x="430" y="124" width="810" height="250" class="panel"/>
+  <text x="460" y="166" class="head">Ranked Market View</text>
+  <rect x="460" y="194" width="230" height="150" fill="#fff6ec" rx="18"/>
+  <rect x="716" y="194" width="230" height="150" fill="#f3f7fb" rx="18"/>
+  <rect x="972" y="194" width="230" height="150" fill="#edf7f1" rx="18"/>
+  <text x="484" y="228" class="body">Priority 1</text>
+  <text x="484" y="260" class="head">KRW-BTC</text>
+  <text x="484" y="292" class="body">BUY bias / score 91</text>
+  <text x="740" y="228" class="body">Priority 2</text>
+  <text x="740" y="260" class="head">AAPL</text>
+  <text x="740" y="292" class="body">audit watch / score 78</text>
+  <text x="996" y="228" class="body">Priority 3</text>
+  <text x="996" y="260" class="head">MSFT</text>
+  <text x="996" y="292" class="body">WATCH / score 74</text>
+  <rect x="40" y="402" width="540" height="302" class="panel"/>
+  <text x="68" y="444" class="head">Watchlist and Alerts</text>
+  <rect x="68" y="470" width="484" height="56" fill="#f7fafc" rx="16"/>
+  <rect x="68" y="538" width="484" height="56" fill="#f7fafc" rx="16"/>
+  <rect x="68" y="606" width="484" height="56" fill="#f7fafc" rx="16"/>
+  <text x="90" y="505" class="body">AAPL / watch only / delayed scanner audit</text>
+  <text x="90" y="573" class="body">KRW-BTC / unread notification / BUY signal</text>
+  <text x="90" y="641" class="body">alert settings / web on / email off</text>
+  <rect x="610" y="402" width="630" height="302" class="panel"/>
+  <text x="638" y="444" class="head">System Diagnostics</text>
+  <rect x="638" y="470" width="270" height="94" fill="#fff6ec" rx="18"/>
+  <rect x="930" y="470" width="270" height="94" fill="#edf7f1" rx="18"/>
+  <rect x="638" y="586" width="562" height="86" fill="#f7fafc" rx="18"/>
+  <text x="660" y="504" class="body">Requested source</text>
+  <text x="660" y="534" class="head">upbit + scanner yahoo</text>
+  <text x="952" y="504" class="body">Active source</text>
+  <text x="952" y="534" class="head">simulator + scanner synthetic</text>
+  <text x="660" y="622" class="body">Fallback active. Requested upbit but currently serving simulator.</text>
+  <text x="660" y="650" class="body">Scanner fallback active. Requested yahoo but currently serving synthetic.</text>
+</svg>

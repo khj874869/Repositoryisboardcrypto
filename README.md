@@ -1,5 +1,7 @@
 # Signal Flow Live
 
+[Korean Portfolio Overview](README.ko.md)
+
 Signal Flow Live is a real-time market signal platform MVP built with FastAPI, SQLite/PostgreSQL, WebSocket streaming, and a shared client contract for web, PWA, and app-style clients.
 
 This project is positioned as a portfolio piece around one core idea:

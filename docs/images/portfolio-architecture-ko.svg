@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Signal Flow Live portfolio architecture</title>
+  <desc id="desc">Korean portfolio architecture diagram for Signal Flow Live.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0e1b1c"/>
+      <stop offset="100%" stop-color="#122933"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" x2="1">
+      <stop offset="0%" stop-color="#ff8f3d"/>
+      <stop offset="100%" stop-color="#ffd166"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 38px 'Segoe UI', Arial, sans-serif; fill: #f7f4ea; }
+      .subtitle { font: 400 18px 'Segoe UI', Arial, sans-serif; fill: #d1ddd8; }
+      .section { font: 700 20px 'Segoe UI', Arial, sans-serif; fill: #0f1717; }
+      .body { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #153036; }
+      .label { font: 600 16px 'Segoe UI', Arial, sans-serif; fill: #f7f4ea; }
+      .small { font: 400 14px 'Segoe UI', Arial, sans-serif; fill: #d1ddd8; }
+      .box { fill: #f7f4ea; stroke: rgba(0,0,0,.08); stroke-width: 2; rx: 22; }
+      .darkbox { fill: rgba(255,255,255,.08); stroke: rgba(255,255,255,.12); stroke-width: 2; rx: 22; }
+      .line { stroke: url(#accent); stroke-width: 4; fill: none; stroke-linecap: round; }
+      .dot { fill: #ffb36a; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="72" y="78" class="title">Signal Flow Live</text>
+  <text x="72" y="110" class="subtitle">Realtime signal platform MVP / shared client contract + runtime fallback + scanner audit</text>
+
+  <rect x="72" y="156" width="270" height="150" class="box"/>
+  <text x="96" y="194" class="section">Client Layer</text>
+  <text x="96" y="230" class="body">- Web dashboard</text>
+  <text x="96" y="258" class="body">- Installable PWA shell</text>
+  <text x="96" y="286" class="body">- Future app-style client</text>
+
+  <rect x="462" y="144" width="310" height="176" class="box"/>
+  <text x="486" y="182" class="section">Shared Backend Contract</text>
+  <text x="486" y="218" class="body">- GET /api/client/bootstrap</text>
+  <text x="486" y="246" class="body">- GET /api/client/dashboard</text>
+  <text x="486" y="274" class="body">- GET /api/client/assets/{symbol}</text>
+  <text x="486" y="302" class="body">- auth / watchlist / notifications</text>
+
+  <rect x="860" y="156" width="268" height="150" class="darkbox"/>
+  <text x="884" y="194" class="label">Product Goals</text>
+  <text x="884" y="230" class="small">one backend</text>
+  <text x="884" y="256" class="small">one product contract</text>
+  <text x="884" y="282" class="small">multiple client surfaces</text>
+
+  <rect x="120" y="420" width="270" height="168" class="box"/>
+  <text x="144" y="458" class="section">Realtime Source</text>
+  <text x="144" y="494" class="body">- Upbit REST bootstrap</text>
+  <text x="144" y="522" class="body">- WebSocket ticker / candle stream</text>
+  <text x="144" y="550" class="body">- simulator fallback</text>
+  <text x="144" y="578" class="body">- runtime status exposure</text>
+
+  <rect x="468" y="408" width="300" height="192" class="box"/>
+  <text x="492" y="446" class="section">Signal + Runtime Orchestration</text>
+  <text x="492" y="482" class="body">- signal generation / dedup</text>
+  <text x="492" y="510" class="body">- signal delivery semantics</text>
+  <text x="492" y="538" class="body">- scanner audit and policy checks</text>
+  <text x="492" y="566" class="body">- fallback and recovery control</text>
+  <text x="492" y="594" class="body">- client-facing status aggregation</text>
+
+  <rect x="846" y="420" width="292" height="168" class="box"/>
+  <text x="870" y="458" class="section">Scanner Source</text>
+  <text x="870" y="494" class="body">- watch-only stocks / ETFs</text>
+  <text x="870" y="522" class="body">- Yahoo adapter</text>
+  <text x="870" y="550" class="body">- synthetic fallback</text>
+  <text x="870" y="578" class="body">- delayed / session metadata</text>
+
+  <rect x="432" y="640" width="372" height="48" fill="rgba(255,255,255,.08)" rx="18"/>
+  <text x="456" y="670" class="label">Persistence: SQLite / PostgreSQL + SQLAlchemy + Alembic</text>
+
+  <path d="M342 231 L462 231" class="line"/>
+  <circle cx="402" cy="231" r="6" class="dot"/>
+  <path d="M772 231 L860 231" class="line"/>
+  <circle cx="816" cy="231" r="6" class="dot"/>
+  <path d="M618 320 L618 408" class="line"/>
+  <circle cx="618" cy="364" r="6" class="dot"/>
+  <path d="M390 504 L468 504" class="line"/>
+  <circle cx="429" cy="504" r="6" class="dot"/>
+  <path d="M768 504 L846 504" class="line"/>
+  <circle cx="807" cy="504" r="6" class="dot"/>
+  <path d="M618 600 L618 640" class="line"/>
+  <circle cx="618" cy="620" r="6" class="dot"/>
+</svg>

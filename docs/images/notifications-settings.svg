@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#11161a"/>
+      <stop offset="100%" stop-color="#233843"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #f7f4ea; }
+      .sub { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #d8dfdc; }
+      .panel { fill: rgba(247,241,232,.96); rx: 24; }
+      .soft { fill: #f7fafc; rx: 18; }
+      .head { font: 700 22px 'Segoe UI', Arial, sans-serif; fill: #102022; }
+      .body { font: 400 15px 'Segoe UI', Arial, sans-serif; fill: #1d3a41; }
+      .toggleOn { fill: #58b368; rx: 14; }
+      .toggleOff { fill: #cbd5db; rx: 14; }
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)"/>
+  <text x="56" y="64" class="title">Portfolio Visual - Notifications and Settings</text>
+  <text x="56" y="92" class="sub">User-facing alert controls with delivery-aware backend semantics</text>
+  <rect x="40" y="124" width="1200" height="590" class="panel"/>
+  <rect x="72" y="160" width="420" height="250" class="soft"/>
+  <text x="98" y="198" class="head">Notification Settings</text>
+  <text x="98" y="236" class="body">Web alerts</text>
+  <rect x="350" y="220" width="96" height="30" class="toggleOn"/>
+  <text x="382" y="240" class="body">ON</text>
+  <text x="98" y="286" class="body">Email alerts</text>
+  <rect x="350" y="270" width="96" height="30" class="toggleOff"/>
+  <text x="380" y="290" class="body">OFF</text>
+  <text x="98" y="338" class="body">Saved per user and reflected in signal delivery state.</text>
+  <rect x="524" y="160" width="684" height="250" class="soft"/>
+  <text x="550" y="198" class="head">Notification Inbox</text>
+  <rect x="550" y="220" width="630" height="42" fill="#edf7f1" rx="14"/>
+  <rect x="550" y="274" width="630" height="42" fill="#fff6ec" rx="14"/>
+  <rect x="550" y="328" width="630" height="42" fill="#f7fafc" rx="14"/>
+  <text x="572" y="246" class="body">KRW-BTC / BUY / unread / Score Combo</text>
+  <text x="572" y="300" class="body">AAPL / scanner review / delayed feed</text>
+  <text x="572" y="354" class="body">MSFT / no subscribers / web alerts off</text>
+  <rect x="72" y="438" width="1136" height="226" class="soft"/>
+  <text x="98" y="476" class="head">Delivery Semantics Example</text>
+  <text x="98" y="512" class="body">notified: web notification row inserted for at least one subscribed watcher</text>
+  <text x="98" y="540" class="body">suppressed: policy blocked delivery, for example scanner delayed or out-of-session</text>
+  <text x="98" y="568" class="body">no_subscribers: signal exists, but no watchlist subscriber or enabled channel could receive it</text>
+  <text x="98" y="596" class="body">reason examples: web_notifications_disabled / email_only_delivery_not_implemented</text>
+</svg>
