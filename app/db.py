@@ -1054,6 +1054,7 @@ def update_notification_settings(
             },
         )
         conn.execute(stmt)
+    return get_notification_settings(user_name)
 
 
 def list_scanner_instruments() -> list[dict[str, Any]]:
@@ -1146,7 +1147,6 @@ def refresh_scanner_market_data(now: datetime | None = None) -> list[dict[str, A
             }
         )
     return updates
-    return get_notification_settings(user_name)
 
 
 def get_watchlist_for_user(user_name: str) -> list[dict[str, Any]]:
@@ -1582,6 +1582,25 @@ def update_signal_delivery(
         )
         row = conn.execute(select(signals).where(signals.c.id == signal_id)).mappings().first()
     return dict(row) if row else None
+
+
+def get_signal_delivery_audience(symbol: str) -> dict[str, int]:
+    row = fetch_one(
+        '''
+        SELECT COUNT(*) AS watchlist_watchers,
+               COALESCE(SUM(CASE WHEN COALESCE(ns.web_enabled, 0) = 1 THEN 1 ELSE 0 END), 0) AS web_enabled_watchers,
+               COALESCE(SUM(CASE WHEN COALESCE(ns.email_enabled, 0) = 1 THEN 1 ELSE 0 END), 0) AS email_enabled_watchers
+        FROM watchlists w
+        LEFT JOIN notification_settings ns ON ns.user_name = w.user_name
+        WHERE w.symbol = ?
+        ''',
+        (symbol,),
+    ) or {}
+    return {
+        'watchlist_watchers': int(row.get('watchlist_watchers') or 0),
+        'web_enabled_watchers': int(row.get('web_enabled_watchers') or 0),
+        'email_enabled_watchers': int(row.get('email_enabled_watchers') or 0),
+    }
 
 
 def create_notifications_for_signal(signal_id: int, symbol: str) -> int:

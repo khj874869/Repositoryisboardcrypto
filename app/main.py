@@ -404,7 +404,7 @@ def get_candles(symbol: str, limit: int = 50, interval_type: str | None = None):
         requested_interval_type=interval_type,
         fallback_interval_type=client_api.default_interval_type_for_symbol(symbol, active_interval_type),
     )
-    return list(reversed(candle_result['candles']))
+    return candle_result['candles']
 
 
 @app.get('/api/assets/{symbol}/signals')

@@ -52,16 +52,23 @@ class ScannerRuntime:
     def status(self) -> dict[str, Any]:
         return dict(self._status)
 
+    def _refresh_provider(self):
+        if self._provider.name == 'synthetic' and self.requested_provider != 'synthetic':
+            return build_scanner_provider(self.requested_provider)
+        return self._provider
+
     async def refresh_once(self) -> list[dict[str, Any]]:
         instruments = db.list_scanner_instruments()
         self._status['symbols'] = [row['symbol'] for row in instruments]
+        provider = self._refresh_provider()
         try:
-            updates = await self._provider.refresh(instruments)
+            updates = await provider.refresh(instruments)
+            self._provider = provider
             self._status['last_error'] = None
             self._status['active_provider'] = self._provider.name
         except Exception as exc:
             self._status['last_error'] = str(exc)
-            if not SCANNER_PROVIDER_FALLBACK_TO_SYNTHETIC or self._provider.name == 'synthetic':
+            if not SCANNER_PROVIDER_FALLBACK_TO_SYNTHETIC or provider.name == 'synthetic':
                 raise
             self._provider = SyntheticScannerProvider()
             self._status['active_provider'] = self._provider.name

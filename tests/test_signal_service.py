@@ -125,3 +125,75 @@ def test_scanner_signal_notifications_are_suppressed_when_delayed(tmp_path, monk
     message = broadcaster.messages[-1][1]
     assert message['notification_delivery'] == 'suppressed'
     assert message['notification_delivery_reason'] == 'scanner_delayed_blocked'
+
+
+def test_signal_delivery_reason_is_web_notifications_disabled_when_watchers_exist(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(db, 'DB_PATH', tmp_path / 'signal_flow_test.db')
+    db.init_db()
+    _force_buy_decision(monkeypatch)
+    db.upsert_instrument_runtime_state(
+        'AAPL',
+        data_mode='scanner',
+        data_source='yahoo',
+        interval_type=db.DISCOVERABLE_SCANNER_INTERVAL,
+        market_session='regular',
+        is_delayed=False,
+        as_of='2026-04-02T00:00:00+00:00',
+        updated_at='2026-04-02T20:00:00+00:00',
+    )
+    db.update_notification_settings('demo', web_enabled=False, email_enabled=False)
+    broadcaster = CaptureBroadcaster()
+
+    asyncio.run(
+        signal_service.evaluate_symbol_and_broadcast(
+            'AAPL',
+            broadcaster,
+            interval_type=db.DISCOVERABLE_SCANNER_INTERVAL,
+        )
+    )
+
+    notifications = db.fetch_notifications('demo')
+    assert notifications == []
+    signals = db.fetch_all('SELECT * FROM signals WHERE symbol = ? ORDER BY created_at DESC', ('AAPL',))
+    assert signals[0]['notification_delivery'] == 'no_subscribers'
+    assert signals[0]['notification_delivery_reason'] == 'web_notifications_disabled'
+    assert signals[0]['notification_count'] == 0
+    message = broadcaster.messages[-1][1]
+    assert message['notification_delivery'] == 'no_subscribers'
+    assert message['notification_delivery_reason'] == 'web_notifications_disabled'
+
+
+def test_signal_delivery_reason_is_email_only_when_web_is_disabled(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(db, 'DB_PATH', tmp_path / 'signal_flow_test.db')
+    db.init_db()
+    _force_buy_decision(monkeypatch)
+    db.upsert_instrument_runtime_state(
+        'AAPL',
+        data_mode='scanner',
+        data_source='yahoo',
+        interval_type=db.DISCOVERABLE_SCANNER_INTERVAL,
+        market_session='regular',
+        is_delayed=False,
+        as_of='2026-04-02T00:00:00+00:00',
+        updated_at='2026-04-02T20:00:00+00:00',
+    )
+    db.update_notification_settings('demo', web_enabled=False, email_enabled=True)
+    broadcaster = CaptureBroadcaster()
+
+    asyncio.run(
+        signal_service.evaluate_symbol_and_broadcast(
+            'AAPL',
+            broadcaster,
+            interval_type=db.DISCOVERABLE_SCANNER_INTERVAL,
+        )
+    )
+
+    notifications = db.fetch_notifications('demo')
+    assert notifications == []
+    signals = db.fetch_all('SELECT * FROM signals WHERE symbol = ? ORDER BY created_at DESC', ('AAPL',))
+    assert signals[0]['notification_delivery'] == 'no_subscribers'
+    assert signals[0]['notification_delivery_reason'] == 'email_only_delivery_not_implemented'
+    assert signals[0]['notification_count'] == 0
+    message = broadcaster.messages[-1][1]
+    assert message['notification_delivery'] == 'no_subscribers'
+    assert message['notification_delivery_reason'] == 'email_only_delivery_not_implemented'

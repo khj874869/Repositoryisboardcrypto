@@ -18,12 +18,13 @@ class CaptureBroadcaster:
 
 def test_refresh_scanner_market_data_updates_watch_only_assets(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(db, 'DB_PATH', tmp_path / 'signal_flow_test.db')
+    now = datetime(2026, 4, 2, 3, 45, tzinfo=UTC)
+    monkeypatch.setattr(db, 'utc_now', lambda: now)
     db.init_db()
 
     before = db.fetch_one('SELECT last_price, updated_at FROM assets WHERE symbol = ?', ('AAPL',))
     assert before is not None
 
-    now = datetime(2026, 4, 2, 3, 45, tzinfo=UTC)
     updates = db.refresh_scanner_market_data(now=now)
 
     assert any(row['symbol'] == 'AAPL' for row in updates)
@@ -132,3 +133,60 @@ def test_scanner_runtime_updates_runtime_state_from_provider_payload(tmp_path, m
     assert runtime_state['data_source'] == 'yahoo'
     assert runtime_state['market_session'] == 'regular'
     assert runtime_state['is_delayed'] is True
+
+
+def test_scanner_runtime_retries_requested_provider_after_fallback(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(db, 'DB_PATH', tmp_path / 'signal_flow_test.db')
+    db.init_db()
+
+    class BrokenProvider:
+        name = 'yahoo'
+
+        async def refresh(self, instruments):
+            del instruments
+            raise RuntimeError('provider unavailable')
+
+    class RecoveredProvider:
+        name = 'yahoo'
+
+        async def refresh(self, instruments):
+            assert any(row['symbol'] == 'AAPL' for row in instruments)
+            return [
+                {
+                    'symbol': 'AAPL',
+                    'price': 211.5,
+                    'change_rate': 1.2,
+                    'candle_time': '2026-04-02T00:00:00+00:00',
+                    'updated_at': '2026-04-02T20:00:00+00:00',
+                    'interval_type': db.DISCOVERABLE_SCANNER_INTERVAL,
+                    'source': 'yahoo',
+                    'data_mode': 'scanner',
+                    'data_source': 'yahoo',
+                    'market_session': 'regular',
+                    'is_delayed': False,
+                }
+            ]
+
+    async def fake_evaluate(symbol: str, broadcaster, *, interval_type: str) -> None:
+        del symbol, broadcaster, interval_type
+
+    monkeypatch.setattr(scanner_runtime, 'evaluate_symbol_and_broadcast', fake_evaluate)
+    runtime = scanner_runtime.ScannerRuntime(CaptureBroadcaster())
+    runtime.requested_provider = 'yahoo'
+    runtime._status['requested_provider'] = 'yahoo'
+    runtime._provider = BrokenProvider()
+
+    updates = asyncio.run(runtime.refresh_once())
+    assert updates
+    assert runtime.status()['active_provider'] == 'synthetic'
+
+    monkeypatch.setattr(scanner_runtime, 'build_scanner_provider', lambda name: RecoveredProvider())
+    recovered_updates = asyncio.run(runtime.refresh_once())
+
+    assert recovered_updates
+    status = runtime.status()
+    assert status['active_provider'] == 'yahoo'
+    assert status['last_error'] is None
+    runtime_state = db.get_instrument_runtime_state('AAPL')
+    assert runtime_state is not None
+    assert runtime_state['data_source'] == 'yahoo'

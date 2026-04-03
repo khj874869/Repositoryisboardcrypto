@@ -526,7 +526,6 @@
       const scannerRequested = source.scanner?.requested_provider || 'synthetic';
       const scannerActive = source.scanner?.active_provider || scannerRequested;
       const value = `${active}${source.interval ? ` / ${source.interval}` : ''}${source.state ? ` / ${source.state}` : ''}`;
-      const fallback = requested !== active;
       el('source-status').textContent = value;
       el('app-environment').textContent = `${app.name} ${app.version} / ${app.environment}`;
       el('requested-source').textContent = `${requested} + scanner ${scannerRequested}`;
@@ -535,9 +534,29 @@
       el('api-base-value').textContent = state.apiBase || '-';
       el('ws-url-value').textContent = state.wsUrl || '-';
       el('runtime-error').textContent = source.last_error ? `Last error: ${source.last_error}` : 'No runtime errors reported.';
-      el('runtime-warning').style.display = fallback ? 'block' : 'none';
-      el('runtime-warning').textContent = fallback ? `Fallback active. Requested ${requested} but currently serving ${active}.` : '';
+      renderRuntimeWarning(source);
       el('hero-feed-note').textContent = signalFilterNarrative(source);
+    }
+
+    function buildRuntimeWarning(source) {
+      const warnings = [];
+      const requested = source?.requested_source || 'unknown';
+      const active = source?.active_source || requested;
+      const scannerRequested = source?.scanner?.requested_provider || 'synthetic';
+      const scannerActive = source?.scanner?.active_provider || scannerRequested;
+      if (requested !== active) warnings.push(`Fallback active. Requested ${requested} but currently serving ${active}.`);
+      if (scannerRequested !== scannerActive) warnings.push(`Scanner fallback active. Requested ${scannerRequested} but currently serving ${scannerActive}.`);
+      if (source?.scanner?.last_error) warnings.push(`Scanner last error: ${source.scanner.last_error}`);
+      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        warnings.push('Hosted install mode requires HTTPS. Current page is not in a secure context.');
+      }
+      return warnings.join(' ');
+    }
+
+    function renderRuntimeWarning(source) {
+      const warning = buildRuntimeWarning(source || state.dashboard?.source || null);
+      el('runtime-warning').style.display = warning ? 'block' : 'none';
+      el('runtime-warning').textContent = warning;
     }
 
     function renderInstallState() {
@@ -561,10 +580,7 @@
       el('secure-context-status').textContent = window.isSecureContext ? 'Secure' : 'Not secure';
       el('service-worker-status').textContent = navigator.serviceWorker?.controller ? 'Active' : 'Registered only';
       el('asset-links-status').textContent = data.android.assetlinks_ready ? 'Configured' : 'Not configured';
-      if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        el('runtime-warning').style.display = 'block';
-        el('runtime-warning').textContent = 'Hosted install mode requires HTTPS. Current page is not in a secure context.';
-      }
+      renderRuntimeWarning();
     }
 
     function watchlistAuditBadges(row) {
@@ -617,15 +633,23 @@
       return 'scanner audit';
     }
 
+    function summarizeDeliveryReason(reason) {
+      const scannerReason = summarizeScannerAuditReason(reason);
+      if (scannerReason) return scannerReason;
+      if (reason === 'no_watchlist_subscribers') return 'no watchlist subscribers';
+      if (reason === 'web_notifications_disabled') return 'web alerts off';
+      if (reason === 'email_only_delivery_not_implemented') return 'email-only subscribers';
+      return reason || '';
+    }
+
     function renderSignals(rows) {
       el('signal-body').innerHTML = rows.length
         ? rows.map(row => {
             const deliveryTone = row.notification_delivery === 'suppressed' ? 'neutral' : row.notification_delivery === 'notified' ? 'buy' : 'muted';
-            const deliveryLabel = row.notification_delivery === 'suppressed'
-              ? `suppressed${row.notification_delivery_reason ? ` / ${row.notification_delivery_reason}` : ''}`
-              : row.notification_delivery === 'notified'
-                ? `notified / ${row.notification_count || 0}`
-                : (row.notification_delivery || 'pending');
+            const deliveryReason = summarizeDeliveryReason(row.notification_delivery_reason);
+            const deliveryLabel = row.notification_delivery === 'notified'
+              ? `notified / ${row.notification_count || 0}${deliveryReason ? ` / ${deliveryReason}` : ''}`
+              : `${row.notification_delivery || 'pending'}${deliveryReason ? ` / ${deliveryReason}` : ''}`;
             const auditLabel = summarizeScannerAuditReason(row.notification_delivery_reason);
             return `<article class="feed-item"><strong><span class="signal-chip ${row.signal_type === 'BUY' ? 'buy' : 'sell'}">${row.signal_type}</span>${escapeHtml(row.symbol)}</strong><div class="mini-note">${escapeHtml(row.strategy_name)} at ${fmtDateTime(row.created_at)}</div><div>${escapeHtml(row.reason)}</div><div class="mini-note" style="margin-top:8px;"><span class="signal-chip ${deliveryTone}">${escapeHtml(deliveryLabel)}</span>${auditLabel ? `<span class="signal-chip neutral">${escapeHtml(auditLabel)}</span>` : ''}</div></article>`;
           }).join('')
@@ -665,7 +689,7 @@
               <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;">
                 <div>
                   <strong>${escapeHtml(row.symbol)}</strong>
-                  <div class="mini-note">${escapeHtml(row.name)} · ${escapeHtml(row.exchange)} · ${escapeHtml(row.market_type)}</div>
+                  <div class="mini-note">${escapeHtml(row.name)} / ${escapeHtml(row.exchange)} / ${escapeHtml(row.market_type)}</div>
                 </div>
                 <div style="text-align:right;">
                   <div>${fmtNum(row.last_price)}</div>
@@ -739,7 +763,7 @@
     function renderProfileEditor(instrument, profile = null) {
       state.activeInstrument = instrument;
       state.activeProfile = profile;
-      el('profile-selected-symbol').textContent = instrument ? `${instrument.symbol} · ${instrument.name} · ${instrument.exchange}` : 'Select an instrument to configure user thresholds.';
+      el('profile-selected-symbol').textContent = instrument ? `${instrument.symbol} / ${instrument.name} / ${instrument.exchange}` : 'Select an instrument to configure user thresholds.';
       el('instrument-open-live-button').disabled = !(instrument && instrument.capabilities.has_realtime_feed);
       el('profile-use-watch-button').disabled = !instrument;
       el('profile-save-button').disabled = !instrument;
@@ -917,7 +941,7 @@
 
     function detailSignalDeliverySummary(detail, row) {
       const parts = [row.notification_delivery || 'pending'];
-      const summarizedReason = summarizeScannerAuditReason(row.notification_delivery_reason) || row.notification_delivery_reason;
+      const summarizedReason = summarizeDeliveryReason(row.notification_delivery_reason);
       const auditLabel = detailSignalAuditLabel(detail, row);
       if (summarizedReason) parts.push(summarizedReason);
       if (auditLabel) parts.push(auditLabel);
@@ -935,7 +959,7 @@
       if (detail.profile_evaluation) {
         readout.push({
           label: 'Custom profile',
-          value: `${detail.profile_evaluation.status} · ${detail.profile_evaluation.reason}`,
+          value: `${detail.profile_evaluation.status} / ${detail.profile_evaluation.reason}`,
           tone: detail.profile_evaluation.status === 'BUY' ? 'buy' : detail.profile_evaluation.status === 'SELL' ? 'sell' : 'muted',
         });
       }

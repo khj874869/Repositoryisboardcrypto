@@ -27,6 +27,41 @@ def resolve_signal_delivery_policy(symbol: str) -> dict[str, Any]:
     return {'allow_notifications': True, 'reason': None}
 
 
+def resolve_signal_delivery_outcome(
+    *,
+    allow_notifications: bool,
+    policy_reason: str | None,
+    notification_count: int,
+    audience: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    if not allow_notifications:
+        return {
+            'notification_delivery': 'suppressed',
+            'notification_delivery_reason': policy_reason,
+        }
+    if notification_count > 0:
+        return {
+            'notification_delivery': 'notified',
+            'notification_delivery_reason': None,
+        }
+
+    audience = audience or {
+        'watchlist_watchers': 0,
+        'web_enabled_watchers': 0,
+        'email_enabled_watchers': 0,
+    }
+    if audience['watchlist_watchers'] <= 0:
+        reason = 'no_watchlist_subscribers'
+    elif audience['web_enabled_watchers'] <= 0 and audience['email_enabled_watchers'] > 0:
+        reason = 'email_only_delivery_not_implemented'
+    else:
+        reason = 'web_notifications_disabled'
+    return {
+        'notification_delivery': 'no_subscribers',
+        'notification_delivery_reason': reason,
+    }
+
+
 async def evaluate_symbol_and_broadcast(symbol: str, broadcaster: Broadcaster, *, interval_type: str) -> None:
     candles = db.fetch_recent_candles(symbol, 120, interval_type=interval_type)
     strategies = db.fetch_all('SELECT * FROM strategies WHERE is_active = 1 ORDER BY id ASC')
@@ -48,12 +83,20 @@ async def evaluate_symbol_and_broadcast(symbol: str, broadcaster: Broadcaster, *
         if inserted_signal:
             delivery = resolve_signal_delivery_policy(symbol)
             notification_count = 0
+            audience: dict[str, int] | None = None
             if delivery['allow_notifications']:
+                audience = db.get_signal_delivery_audience(symbol)
                 notification_count = db.create_notifications_for_signal(inserted_signal['id'], symbol)
+            outcome = resolve_signal_delivery_outcome(
+                allow_notifications=delivery['allow_notifications'],
+                policy_reason=delivery['reason'],
+                notification_count=notification_count,
+                audience=audience,
+            )
             persisted_signal = db.update_signal_delivery(
                 inserted_signal['id'],
-                notification_delivery='notified' if notification_count else ('suppressed' if not delivery['allow_notifications'] else 'no_subscribers'),
-                notification_delivery_reason=delivery['reason'],
+                notification_delivery=outcome['notification_delivery'],
+                notification_delivery_reason=outcome['notification_delivery_reason'],
                 notification_count=notification_count,
             ) or inserted_signal
             await broadcaster.broadcast(

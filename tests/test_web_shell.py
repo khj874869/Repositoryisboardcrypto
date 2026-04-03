@@ -48,6 +48,8 @@ def test_web_shell_routes_are_served(tmp_path, monkeypatch) -> None:
         assert 'hero-feed-preset' in index_response.text
         assert 'detail-audit-warning' in index_response.text
         assert 'Scanner audit active.' in index_response.text
+        assert 'Scanner fallback active.' in index_response.text
+        assert 'Scanner last error:' in index_response.text
         assert 'scanner audit' in index_response.text
         assert 'audit review' in index_response.text
         assert 'Audit state' in index_response.text
@@ -72,6 +74,7 @@ def test_web_shell_routes_are_served(tmp_path, monkeypatch) -> None:
         assert 'signal_audit_only' in index_response.text
         assert 'history.replaceState' in index_response.text
         assert "window.addEventListener('popstate'" in index_response.text
+        assert '쨌' not in index_response.text
 
         assert manifest_response.status_code == 200
         assert 'Signal Flow Live' in manifest_response.text

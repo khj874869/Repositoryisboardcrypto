@@ -108,22 +108,36 @@ def build_signal_feed(
     include_suppressed: bool = True,
     audit_only: bool = False,
 ) -> list[dict[str, Any]]:
-    fetch_limit = max(limit * 4, limit, 20)
-    rows = db.fetch_all('SELECT * FROM signals ORDER BY created_at DESC LIMIT ?', (fetch_limit,))
-    runtime_states = db.get_instrument_runtime_states(list({row['symbol'] for row in rows}))
+    batch_size = max(limit * 4, limit, 20)
     filtered: list[dict[str, Any]] = []
-    for row in rows:
-        if not include_suppressed and row.get('notification_delivery') == 'suppressed':
-            continue
-        if notification_delivery and row.get('notification_delivery') != notification_delivery:
-            continue
-        if data_mode:
-            runtime_state = runtime_states.get(row['symbol'])
-            if (runtime_state or {}).get('data_mode') != data_mode:
+    offset = 0
+
+    while len(filtered) < limit:
+        rows = db.fetch_all(
+            'SELECT * FROM signals ORDER BY created_at DESC LIMIT ? OFFSET ?',
+            (batch_size, offset),
+        )
+        if not rows:
+            break
+
+        runtime_states = db.get_instrument_runtime_states(list({row['symbol'] for row in rows}))
+        for row in rows:
+            if not include_suppressed and row.get('notification_delivery') == 'suppressed':
                 continue
-        if audit_only and not _is_audit_signal(row, runtime_states.get(row['symbol'])):
-            continue
-        filtered.append(row)
+            if notification_delivery and row.get('notification_delivery') != notification_delivery:
+                continue
+            if data_mode:
+                runtime_state = runtime_states.get(row['symbol'])
+                if (runtime_state or {}).get('data_mode') != data_mode:
+                    continue
+            if audit_only and not _is_audit_signal(row, runtime_states.get(row['symbol'])):
+                continue
+            filtered.append(row)
+
+        if len(rows) < batch_size:
+            break
+        offset += batch_size
+
     ranked = sorted(filtered, key=_signal_delivery_priority)
     return ranked[:limit]
 

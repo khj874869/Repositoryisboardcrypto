@@ -258,6 +258,67 @@ def test_signal_feed_filters_by_delivery_and_mode(tmp_path, monkeypatch) -> None
         assert audit_dashboard_payload['signals'][0]['symbol'] == 'AAPL'
 
 
+def test_signal_feed_scans_multiple_batches_for_filtered_results(tmp_path, monkeypatch) -> None:
+    with create_client(tmp_path, monkeypatch) as client:
+        for idx in range(20):
+            seed_signal_row(
+                symbol='KRW-BTC',
+                signal_type='BUY',
+                strategy_name=f'Live Buy {idx}',
+                score=80.0 + idx,
+                reason='Live notified signal',
+                price=124.0 + idx,
+                created_at=f'2026-04-02T01:{39 - idx:02d}:00+00:00',
+                notification_delivery='notified',
+                notification_count=1,
+            )
+
+        seed_signal_row(
+            symbol='AAPL',
+            signal_type='BUY',
+            strategy_name='Scanner Buy Older',
+            score=91.0,
+            reason='Older scanner suppressed signal',
+            price=210.0,
+            created_at='2026-04-02T01:19:00+00:00',
+            notification_delivery='suppressed',
+            notification_delivery_reason='scanner_delayed_blocked',
+        )
+        seed_signal_row(
+            symbol='MSFT',
+            signal_type='SELL',
+            strategy_name='Scanner Sell Older',
+            score=77.0,
+            reason='Older scanner no subscriber signal',
+            price=315.0,
+            created_at='2026-04-02T01:18:00+00:00',
+            notification_delivery='no_subscribers',
+        )
+
+        recent = client.get('/api/signals/recent?limit=2&signal_data_mode=scanner')
+        assert recent.status_code == 200
+        recent_payload = recent.json()
+        assert len(recent_payload) == 2
+        assert {row['symbol'] for row in recent_payload} == {'AAPL', 'MSFT'}
+
+
+def test_patch_notification_settings_returns_updated_settings(tmp_path, monkeypatch) -> None:
+    with create_client(tmp_path, monkeypatch) as client:
+        response = client.patch(
+            '/api/notification-settings',
+            json={'web_enabled': False, 'email_enabled': True},
+            headers=login_headers(client),
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload['web_enabled'] is False
+        assert payload['email_enabled'] is True
+
+        stored = db.get_notification_settings('demo')
+        assert stored['web_enabled'] is False
+        assert stored['email_enabled'] is True
+
+
 def test_client_asset_detail_returns_snapshot_and_recent_rows(tmp_path, monkeypatch) -> None:
     with create_client(tmp_path, monkeypatch) as client:
         seed_market_data()
@@ -329,6 +390,7 @@ def test_raw_candles_endpoint_falls_back_to_active_interval_when_requested_inter
         payload = response.json()
         assert len(payload) == 5
         assert all(row['interval_type'] == 'upbit-1s' for row in payload)
+        assert [row['candle_time'] for row in payload] == sorted(row['candle_time'] for row in payload)
 
 
 def test_raw_candles_endpoint_uses_scanner_interval_for_watch_only_symbol(tmp_path, monkeypatch) -> None:
@@ -338,6 +400,7 @@ def test_raw_candles_endpoint_uses_scanner_interval_for_watch_only_symbol(tmp_pa
         payload = response.json()
         assert len(payload) == 5
         assert all(row['interval_type'] == 'scanner-1d' for row in payload)
+        assert [row['candle_time'] for row in payload] == sorted(row['candle_time'] for row in payload)
 
 
 def test_instrument_search_includes_coins_and_stocks(tmp_path, monkeypatch) -> None:

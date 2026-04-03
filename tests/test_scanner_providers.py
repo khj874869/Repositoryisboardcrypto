@@ -74,6 +74,8 @@ def test_build_scanner_provider_defaults_to_synthetic_for_unknown_name() -> None
 
 def test_yahoo_provider_refresh_updates_assets_and_candles(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(db, 'DB_PATH', tmp_path / 'signal_flow_test.db')
+    frozen_now = datetime(2026, 4, 2, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr(db, 'utc_now', lambda: frozen_now)
     db.init_db()
     monkeypatch.setattr(scanner_providers.httpx, 'AsyncClient', FakeYahooClient)
 
