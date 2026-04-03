@@ -66,3 +66,4 @@ class MarketRuntime:
         if self._last_error and not status.get('last_error'):
             status['last_error'] = self._last_error
         return status
+    
